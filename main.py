@@ -3,24 +3,33 @@ from brian2 import NeuronGroup, Synapses, Network, PoissonInput, StateMonitor, S
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-#oltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I = simulate_brunels_network(2)
-
 import numpy as np
 
-# Count the number of spikes for each neuron in spike_monitor_E
-# num_neurons_E = np.max(spike_monitor_E.i) + 1 if len(spike_monitor_E.i) > 0 else 0
-# spike_counts = np.bincount(spike_monitor_E.i, minlength=num_neurons_E)
+X = np.load('data/iris_X_rates.npy')
+y = np.load('data/iris_y.npy')
 
-# # Save the spike counts array
-# np.save('spike_monitor_E_counts.npy', spike_counts)
 
-spike_counts = np.load('spike_monitor_E_counts.npy')
-print(spike_counts)
-print(len(spike_counts))
 
-plt.plot(spike_counts)
-plt.show()
+
+
+
+i = 0
+X_output = []
+for observation in X:
+    print(f"Observation {i}")
+    _, _, spike_monitor_E, _, _, _ = simulate_brunels_network(observation)
+    num_neurons_E = np.max(spike_monitor_E.i) + 1 if len(spike_monitor_E.i) > 0 else 0
+    spike_counts = np.bincount(spike_monitor_E.i, minlength=num_neurons_E)
+    X_output.append(spike_counts)
+    print(f"Dimension of output matrix: {np.shape(X_output)}")
+
+    i += 1
+
+
+np.save('data/X_output.npy', X_output)
+
+
+
 
 
 
