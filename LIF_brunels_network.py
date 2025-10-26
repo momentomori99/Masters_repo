@@ -121,9 +121,9 @@ def simulate_brunels_network(input_data=None):
 
 
 if __name__ == "__main__":
-    sample_input =np.array([1, 0.43, 0.3, 0.14])
+    sample_input =np.array([ -0.46797975, -18.47203951,  25.13454943,  12.69791848]) 
 
-    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I = simulate_brunels_network(sample_input)
+    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I = simulate_brunels_network(input_data=sample_input)
 
     # Find the neuron in E_population that fired the most
     n_E_neurons = voltage_monitor_E.v.shape[0]
@@ -170,5 +170,5 @@ if __name__ == "__main__":
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
     # Save the figure before showing it
-    plt.savefig("No_input_700_noise.png", dpi=300, bbox_inches='tight')
+    plt.savefig("sample_input2.png", dpi=300, bbox_inches='tight')
     plt.show()

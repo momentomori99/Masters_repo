@@ -1,5 +1,5 @@
 from sklearn.datasets import load_iris
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import numpy as np
 import brian2 as b2
 
@@ -10,7 +10,7 @@ X = iris.data
 y = iris.target
 
 # Normalize the features
-scaler = StandardScaler()
+scaler = MinMaxScaler()
 X_normalized = scaler.fit_transform(X)
 
 
@@ -23,3 +23,6 @@ r = r_min + X_normalized * (r_max - r_min)
 # Optionally save normalized data if needed
 np.save('iris_X_rates.npy', r)
 np.save('iris_y.npy', y)
+
+
+print(r[52])

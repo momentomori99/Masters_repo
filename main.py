@@ -26,7 +26,7 @@ for observation in X:
     i += 1
 
 
-np.save('data/X_output.npy', X_output)
+np.save('data/X_output2.npy', X_output)
 
 
 
