@@ -4,7 +4,7 @@ import numpy as np
 from numpy import random
 import matplotlib.pyplot as plt
 
-def simulate_brunels_network(input_data=None):
+def simulate_brunels_network(input_data=None, g_strength=4.5):
 
 
     
@@ -14,12 +14,12 @@ def simulate_brunels_network(input_data=None):
     # ----- Parameters ------
     sim_time = 1000. * b2.ms # simulation time
 
-    w0 = 0.1 * b2.mV # synaptic weight strength
-    g = 4 # Relative inhibitory strength g
+    w0 = 1.0 * b2.mV # synaptic weight strength
+    g = g_strength # Relative inhibitory strength g
 
     N_E = 4000 # number of excitatory neurons
-    N_I = 500 # number of inhibitory neurons
-    N_noise = 650 # number of noise neurons to each neuron in the network
+    N_I = 1000 # number of inhibitory neurons
+    N_noise = 80# number of noise neurons to each neuron in the network
 
     v_reset = +10. * b2.mV # reset potential
     v_rest = 0. * b2.mV # resting potential
@@ -27,7 +27,7 @@ def simulate_brunels_network(input_data=None):
     abs_refractory_period = 2.0 * b2.ms # absolute refractory period
     membrane_time_scale = 20. * b2.ms # membrane time scale
     synaptic_delay = 1.5 * b2.ms # synaptic delay
-    noise_rate = 13. * b2.Hz # noise rate
+    noise_rate = 10. * b2.Hz # noise rate
     noise_weight = w0 # noise weight. If you gonna pick a specific value, remember to *b2.mV to get the correct units
     # defining the postsyneaptic potential amplitudes 
     J_E = w0 
@@ -39,23 +39,7 @@ def simulate_brunels_network(input_data=None):
     n_clusters = 0
     cluster_size = 100
     if input_data is not None:
-        # Convert input_data into Hz magnitudes and sanitize
-        max_rate_hz = 200.0
-        if hasattr(input_data, 'units'):
-            magnitudes = np.asarray(input_data / b2.Hz, dtype=float)
-        else:
-            magnitudes = np.asarray(input_data, dtype=float)
-        magnitudes = np.nan_to_num(magnitudes, nan=0.0, posinf=max_rate_hz, neginf=0.0)
-        magnitudes = np.clip(magnitudes, 0.0, max_rate_hz)
-        input_quantities = magnitudes * b2.Hz
-
-        # Normalize to a list of scalar rates (Quantities)
-        if hasattr(input_quantities, 'ndim') and getattr(input_quantities, 'ndim', 0) > 0:
-            feature_rates = [input_quantities[i] for i in range(int(input_quantities.shape[0]))]
-        elif isinstance(input_quantities, (list, tuple, np.ndarray)):
-            feature_rates = list(input_quantities)
-        else:
-            feature_rates = [input_quantities]
+        feature_rates = input_data
 
         n_clusters = len(feature_rates)
         print(f"Number of clusters: {n_clusters}")
@@ -76,9 +60,9 @@ def simulate_brunels_network(input_data=None):
     I_population = network[N_E:]
 
     # ----- Define the synaptic connections -----
-    E_synapses = Synapses(E_population, target=network, on_pre="v += J_E", delay=synaptic_delay)
+    E_synapses = Synapses(E_population, target=network, on_pre="v_post += J_E", delay=synaptic_delay)
     E_synapses.connect(p=0.1) # 10% of excitatory neurons are connected to the rest of the network
-    I_synapses = Synapses(I_population, target=network, on_pre="v += J_I", delay=synaptic_delay)
+    I_synapses = Synapses(I_population, target=network, on_pre="v_post += J_I", delay=synaptic_delay)
     I_synapses.connect(p=0.1) # 10% of inhibitory neurons are connected to the rest of the network
 
 
@@ -86,24 +70,13 @@ def simulate_brunels_network(input_data=None):
     noise_input = PoissonInput(target = network, target_var = "v", N=N_noise, rate=noise_rate, weight=noise_weight)
 
     # ----- Feature inputs -----
-    if n_clusters > 0:
-        input_weights = 1.5*w0
-        N_input = 100 # Number of Poisson sources per target neuron in a cluster
+    if input_data is not None:
 
-        # Brian2 Subgroups require slicing, not arbitrary index arrays
-        # Place clusters sequentially without overlap
-        for k in range(n_clusters):
-            start = k*cluster_size
-            stop = start + cluster_size
-            if stop > N_E:
-                break
-            E_cluster = E_population[start:stop]
-            rate_k = feature_rates[k]
-            # Ensure rate_k is a scalar Quantity (not an array); take magnitude if wrapped in array
-            if hasattr(rate_k, 'shape') and getattr(rate_k, 'shape', ()) != ():
-                rate_k = (np.asarray(rate_k / b2.Hz, dtype=float).reshape(-1)[0]) * b2.Hz
-            feature_input = PoissonInput(target = E_cluster, target_var = "v", N=N_input, rate=rate_k, weight=input_weights)
-
+        feature1_input = PoissonInput(target = E_population[0:100], target_var = "v", N=100, rate=input_data[0], weight=1.5*w0)
+        feature2_input = PoissonInput(target = E_population[100:200], target_var = "v", N=100, rate=input_data[1], weight=1.5*w0)
+        feature3_input = PoissonInput(target = E_population[200:300], target_var = "v", N=100, rate=input_data[2], weight=1.5*w0)
+        feature4_input = PoissonInput(target = E_population[300:400], target_var = "v", N=100, rate=input_data[3], weight=1.5*w0)
+   
 
     # ----- Collect the data of simualtion -----
     voltage_monitor_E = StateMonitor(E_population, variables="v", record=True)
@@ -117,13 +90,29 @@ def simulate_brunels_network(input_data=None):
 
     b2.run(sim_time)
 
+    cvs = []
+    for n in range(min(200, int(np.max(spike_monitor_E.i)+1))):
+        t = (spike_monitor_E.t[spike_monitor_E.i==n] / b2.ms).astype(float)
+        if len(t) >= 3:
+            isi = np.diff(t)
+            if np.mean(isi) > 0:
+                cvs.append(np.std(isi)/np.mean(isi))
+    print("================================================")
+    
+    print(f"Mean CV: {np.mean(cvs)}")
+    print(f"Std CV: {np.std(cvs)}")
+    print(f"Median CV: {np.median(cvs)}")
+    print("================================================")
     return voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I
 
 
 if __name__ == "__main__":
-    sample_input =np.array([ -0.46797975, -18.47203951,  25.13454943,  12.69791848]) 
+    sample_input =np.array([ 0, 0,  0,  0]) * b2.Hz
 
-    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I = simulate_brunels_network(input_data=sample_input)
+    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I = simulate_brunels_network(input_data=sample_input, g_strength=4.5)
+
+
+ 
 
     # Find the neuron in E_population that fired the most
     n_E_neurons = voltage_monitor_E.v.shape[0]
