@@ -21,8 +21,8 @@ r = r_min + X_normalized * (r_max - r_min)
 
 
 # Optionally save normalized data if needed
-np.save('iris_X_rates.npy', r)
-np.save('iris_y.npy', y)
+np.save('data/iris_X_rates.npy', r)
+np.save('data/iris_y.npy', y)
 
 
-print(r[52])
+print(r[0])
