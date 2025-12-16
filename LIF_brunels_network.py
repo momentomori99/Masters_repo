@@ -29,7 +29,7 @@ def simulate_brunels_network(input_data=None, g_strength=4.5, eta=1.0, p_rec=0.1
     v_thresh = 20. * b2.mV # threshold potential
     abs_refractory_period = 2.0 * b2.ms # absolute refractory period
     tau_m = 20. * b2.ms # membrane time scale
-    synaptic_delay = 1.0 * b2.ms # synaptic delay
+    synaptic_delay = 1.5 * b2.ms # synaptic delay
 
     #Synaptic amplitudes
     J_E = w0 
@@ -156,42 +156,9 @@ def simulate_brunels_network(input_data=None, g_strength=4.5, eta=1.0, p_rec=0.1
 
 if __name__ == "__main__":
     sample_input =np.array([0, 0,  0, 0]) * b2.Hz
-
-    # # Prepare g and eta grid
-    # g_values = np.linspace(3.6, 6.0, 6)
-    # eta_values = np.linspace(0.7, 1.4, 8)
-    # cv_matrix = np.zeros((len(eta_values), len(g_values)))
-    # rate_matrix = np.zeros((len(eta_values), len(g_values)))
-    # annot_matrix = np.empty(cv_matrix.shape, dtype=object)
-
-    # for gi, g in enumerate(g_values):
-    #     for ei, eta in enumerate(eta_values):
-    #         voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I, cv, mean_rate = simulate_brunels_network(
-    #             input_data=sample_input, g_strength=g, eta=eta)
-    #         cv_matrix[ei, gi] = cv
-    #         rate_matrix[ei, gi] = mean_rate
-    #         annot_matrix[ei, gi] = f"{cv:.2f}\n{mean_rate:.1f}"
-
-    #         print(f"g: {g}, eta: {eta}, CV: {cv}, Mean rate: {mean_rate}")
-
-    # # Plotting heatmap of CV (annotated with mean rate)
-    # import matplotlib.pyplot as plt
-    # import seaborn as sns
-
-    # plt.figure(figsize=(8, 6))
-    # ax = sns.heatmap(
-    #     cv_matrix, 
-    #     xticklabels=np.round(g_values, 2), 
-    #     yticklabels=np.round(eta_values, 2),
-    #     annot=annot_matrix, fmt="", cmap="viridis"
-    # )
-    # plt.xlabel("g")
-    # plt.ylabel("eta")
-    # plt.title("Heatmap of Mean CV (top) and Mean Rate (Hz, bottom)")
-    # plt.tight_layout()
-    # plt.show()
-
-    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I, _, _, _ = simulate_brunels_network(input_data=sample_input, g_strength=2, eta=0.94)
+    g_str = 7
+    eta_val = 3.5
+    voltage_monitor_E, voltage_monitor_I, spike_monitor_E, spike_monitor_I, rate_monitor_E, rate_monitor_I, _, _, _ = simulate_brunels_network(input_data=sample_input, g_strength=g_str, eta=eta_val)
 
 
  
@@ -211,35 +178,17 @@ if __name__ == "__main__":
     # Raster plot (spike monitor)
     import seaborn as sns
 
+    # Set style and create a long and short ("wide and flat") figure
     sns.set(style="whitegrid", palette="muted", font_scale=1.15, rc={"axes.titlesize":18, "axes.labelsize":15})
-    plt.figure(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(13, 3))  # Increased height for better label visibility
 
     # Raster plot (spike monitor)
-    ax1 = plt.subplot(2, 1, 1)
-    sc = plt.scatter(spike_monitor_E.t / b2.ms, spike_monitor_E.i, c=spike_monitor_E.i, cmap="viridis", marker='.', s=8, alpha=0.8, edgecolors='none')
-    plt.xlabel('Time (ms)')
-    plt.ylabel('Neuron index')
-    plt.title('Spike Raster Plot (SR regime)', weight='bold')
-    plt.grid(True, linestyle='--', alpha=0.6)
-    cbar = plt.colorbar(sc, label="Neuron index", ax=ax1)
-    cbar.set_alpha(1)
-    cbar.update_normal(sc)  # ensures colorbar updates properly
+    scatter = ax.scatter(spike_monitor_E.t / b2.ms, spike_monitor_E.i, color="slategrey", marker='.', s=8, alpha=0.8, edgecolors='none')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Neuron index')
+    ax.set_title('Spike Raster Plot (Synchronous and irregular (SI) regime)')
+    ax.grid(True, linestyle='--', alpha=0.6)
 
-    # Population rate plot
-    ax2 = plt.subplot(2, 1, 2)
-    times = rate_monitor_E.t / b2.ms
-    rate = rate_monitor_E.smooth_rate(window='flat', width=5*b2.ms) / b2.Hz
-    plt.plot(times, rate, color=sns.color_palette()[1], linewidth=2.2)
-    plt.xlabel('Time (ms)')
-    plt.ylabel('Firing rate (Hz)')
-    plt.title('Population Firing Rate', weight='bold')
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.tight_layout(pad=2.0)
-
-    # Make axes more professional
-    for ax in [ax1, ax2]:
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-    # Save the figure before showing it
-    plt.savefig("output_plot.png", dpi=300, bbox_inches='tight')
+    plt.tight_layout()  # Adjust layout for labels
+    #plt.savefig("output_plot.png", dpi=300, bbox_inches='tight')
     plt.show()
