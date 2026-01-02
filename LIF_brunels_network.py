@@ -57,6 +57,7 @@ def simulate_brunels_network(input_data=None, g_strength=4.5, eta=1.0, p_rec=0.1
     nu_ext = eta * nu_th
     noise_weight = J_E
 
+
     # External poisson bombardment to E (And I if chosen)
     ext_E = PoissonInput(target = E_population, target_var = "v", N=K_ext, rate=nu_ext, weight=noise_weight)
     if use_ext_to_I:
