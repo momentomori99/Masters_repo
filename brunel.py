@@ -5,7 +5,10 @@ import matplotlib.pyplot as plt
 class Brunel:
     def __init__(self):
         nest.ResetKernel()  # Reset the NEST kernel
-        nest.resolution = 0.1 # Simulation resolution (ms)
+        seed = 100699
+        nest.SetKernelStatus({"resolution": 0.1, "rng_seed": seed}) # Simulation resolution (ms) and random seed
+        np.random.seed(seed)
+
         self.simtime = 1000.0  # Simulation time (ms)
         self.delay = 1.5  # Synaptic delay (ms)
         self.g = 5.0  # Relative inhibitory strength
@@ -58,6 +61,10 @@ class Brunel:
         noise = nest.Create("poisson_generator", self.N_neurons, params={"rate": self.p_rate})
         self.espikes = nest.Create("spike_recorder")
         self.ispikes = nest.Create("spike_recorder")
+
+        # Random initial membrane potentials
+        V_init = np.random.uniform(self.neuron_params["V_reset"], self.theta, size=self.N_neurons)
+        nest.SetStatus(self.nodes_ex + self.nodes_in, [{"V_m": float(v)} for v in V_init])
 
         # Defining synapse models
         nest.CopyModel("static_synapse", "background", self.static_params)
