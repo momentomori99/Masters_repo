@@ -5,13 +5,19 @@ import matplotlib.pyplot as plt
 import scipy.special as sp
 
 class Brunel:
-    def __init__(self, input = None, stdp = True):
+    def __init__(self, input = None, stdp = True, reset = True):
         """
         Initialize the Brunel model.
         Args:
             input: Input data to the network. ([1, N_features]numpy array)
+            stdp: Whether to use STDP or not. (Boolean)
+            reset: Whether to reset the NEST kernel or not. (Boolean)
         """
-        nest.ResetKernel()  # Reset the NEST kernel
+        if reset:
+            nest.ResetKernel()  # Reset the NEST kernel
+            print("Resetting NEST kernel")
+        else:   
+            print("NEST kernel is NOT reset")
         nest.print_time = False
         nest.overwrite_files = True
         seed = 100699
@@ -20,10 +26,10 @@ class Brunel:
 
         self.simtime = 1000.0  # Simulation time (ms)
         self.delay = 1.5  # Synaptic delay (ms)
-        self.g = 5.0  # Relative inhibitory strength
+        self.g = 4.5  # Relative inhibitory strength
         self.eta = 1.0  # External rate in units of threshold
         self.epsilon = 0.1  # Connection probability
-        self.N_neurons = 5000  # Total number of neurons
+        self.N_neurons = 1000  # Total number of neurons
         self.NI = self.N_neurons // 5  # Number of inhibitory neurons
         self.NE = self.N_neurons - self.NI  # Number of excitatory neurons (four times as many as inhibitory)
         self.N_rec = 50  # Number of recorded excitatory neurons
@@ -71,6 +77,8 @@ class Brunel:
             self.feature_size = self.group_size * self.n_features
                 
 
+        
+    def print_summary(self):
         print("======== Quick Summary of some of the parameters =======")
         print(f"Number of neurons: {self.N_neurons}")
         print(f"Number of inhibitory neurons: {self.NI}")
@@ -97,6 +105,8 @@ class Brunel:
                  t_max * np.exp(-t_max / tauSyn)))
 
     def build_network(self):
+        print("Building network...")
+
         # Creating nodes
         self.nodes_ex = nest.Create("iaf_psc_alpha", self.NE, params=self.neuron_params)
         self.nodes_in = nest.Create("iaf_psc_alpha", self.NI, params=self.neuron_params)
@@ -141,8 +151,18 @@ class Brunel:
                 self.feature_generators.append(gens)
 
 
+    
+        
+
+    def give_input(self, input):
+        pass
+            
+            
+
+
 
     def simulate(self):
+        print("Simulating running...")
         nest.Simulate(self.simtime)
 
     def get_spike_vector(self, N=200):
@@ -185,7 +205,7 @@ class Brunel:
         print(f"Average firing rate of first {N} excitatory neurons: {firing_rate_N:.2f} Hz")
         print(f"p rate: {self.p_rate:.2f} Hz")
 
-    def get_stdp_weights(self, bins=100, show_top_bottom=False):
+    def get_stdp_weights(self, bins=100, show_top_bottom=False, plot=True, return_weights=False):
         """
         Plot histogram of weights for synapses that use the 'excitatory_stdp' model.
         Also print the top 10 synapses with highest and lowest weights after simulation.
@@ -220,18 +240,23 @@ class Brunel:
             for w, s, t in sorted_conns[-10:]:
                 print(f"  {w:.4f} mV\tsource: {s}\ttarget: {t}")
         
-        plt.figure(figsize=(8, 5))
-        plt.hist(w_E, bins=bins)
-        plt.xlabel("Weight (mV)")
-        plt.ylabel("Count")
-        plt.title("Histogram of STDP synaptic weights (after simulation)\n"
-                  f"Mean: {w_mean:.3f} mV, Std: {w_std:.3f} mV")
-        # Draw a vertical dotted line at the mean
-        plt.axvline(w_mean, color='r', linestyle=':', linewidth=2, label=f"Mean ({w_mean:.3f} mV)")
-        # Annotate mean and std in the top right corner
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
+        if plot:
+            plt.figure(figsize=(8, 5))
+            plt.hist(w_E, bins=bins)
+            plt.xlabel("Weight (mV)")
+            plt.ylabel("Count")
+            plt.title("Histogram of STDP synaptic weights (after simulation)\n"
+                    f"Mean: {w_mean:.3f} mV, Std: {w_std:.3f} mV")
+            # Draw a vertical dotted line at the mean
+            plt.axvline(w_mean, color='r', linestyle=':', linewidth=2, label=f"Mean ({w_mean:.3f} mV)")
+            # Annotate mean and std in the top right corner
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+
+        if return_weights:
+            return w_E
+
 
     
     def plot_raster(self):
