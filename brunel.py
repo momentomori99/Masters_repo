@@ -3,9 +3,9 @@ nest.set_verbosity("M_ERROR")
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special as sp
-
+import time
 class Brunel:
-    def __init__(self, input = None, stdp = True, reset = True):
+    def __init__(self, input=None, stdp = True, reset = True, N_neurons = 1000):
         """
         Initialize the Brunel model.
         Args:
@@ -29,7 +29,7 @@ class Brunel:
         self.g = 4.5  # Relative inhibitory strength
         self.eta = 1.0  # External rate in units of threshold
         self.epsilon = 0.1  # Connection probability
-        self.N_neurons = 1000  # Total number of neurons
+        self.N_neurons = N_neurons  # Total number of neurons
         self.NI = self.N_neurons // 5  # Number of inhibitory neurons
         self.NE = self.N_neurons - self.NI  # Number of excitatory neurons (four times as many as inhibitory)
         self.N_rec = 50  # Number of recorded excitatory neurons
@@ -39,6 +39,10 @@ class Brunel:
         self.CI = int(self.epsilon * self.NI)  # number of inhibitory synapses per neuron
         self.C_tot = int(self.CI + self.CE)  # total number of synapses per neuron
 
+        print("CE", self.CE)
+        print("CI", self.CI)
+        print("C_tot", self.C_tot)
+
         # LIF neuron parameters
         self.tauSyn = 0.5 # synaptic time constant in ms
         self.tauMem = 20.0  # time constant of membrane potential in ms
@@ -46,32 +50,27 @@ class Brunel:
         self.theta = 20.0  # membrane threshold potential in mV
         self.neuron_params = {"C_m": self.CMem, "tau_m": self.tauMem, "tau_syn_ex": self.tauSyn, "tau_syn_in": self.tauSyn, "t_ref": 2.0, "E_L": 0.0, "V_reset": 0.0, "V_m": 0.0, "V_th": self.theta}
         self.J = 0.1  # postsynaptic amplitude in mV
-        self.J_unit = self.ComputePSPnorm(self.tauMem, self.CMem, self.tauSyn)
-        self.J_ex = self.J / self.J_unit  # amplitude of excitatory postsynaptic potential
-        self.J_in = -self.g * self.J_ex  # amplitude of inhibitory postsynaptic potential
+        self.J_unit = self.ComputePSPnorm(self.tauMem, self.CMem, self.tauSyn) # [mV / pA]
+        self.J_ex = self.J / self.J_unit  # amplitude of excitatory postsynaptic potential [pA]
+        self.J_in = -self.g * self.J_ex  # amplitude of inhibitory postsynaptic potential [pA]
         self.stim_weight = 80 * self.J_ex
 
         # Threshold rate, external firing rate and converted spikes per second
         self.nu_th = (self.theta * self.CMem) / (self.J_ex * self.CE * np.exp(1.0) * self.tauMem * self.tauSyn)
         self.nu_ex = self.eta * self.nu_th 
-        self.p_rate = 1000.0 * self.nu_ex * self.CE # Multiply be 1000 to convert to Hz
+        self.p_rate = (1000.0 * self.nu_ex * self.CE) / 1.1# Multiply be 1000 to convert to Hz
 
         # Synapse parameters
         self.stdp = stdp
-        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.01, "alpha": 1.0,  "Wmax": 30.0}
+        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.001, "alpha": 0.5,  "Wmax": 30.0}
         self.static_params = {"weight": self.J_ex, "delay": self.delay}
         self.inhibitory_params = {"weight": self.J_in, "delay": self.delay}
-        self.bernoulli_conn = {"rule": "pairwise_bernoulli", "p": self.epsilon}
+        self.bernoulli_conn = {"rule": "pairwise_bernoulli", "p": self.epsilon, "allow_autapses": False}
         self.stimulus_params = {"weight": self.stim_weight, "delay": self.delay}
-        # Input logic
-        self.input = input
-        self.n_features = 0
-        self.group_size = 0
-        self.feature_size = 0
-        if input is not None:
-            if np.shape(input)[0] != 1 or not isinstance(input, np.ndarray):
-                raise ValueError(f"Input data must be of shape (1, N_features). And it also has to be numpy array \\ Input gotten is {np.shape(input)} and type {type(input)}")
 
+        self.input = input
+        if input is not None:
+            
             self.n_features = np.shape(self.input)[1]
             self.group_size = int(self.N_neurons * 0.05)
             self.feature_size = self.group_size * self.n_features
@@ -123,47 +122,67 @@ class Brunel:
         nest.CopyModel("static_synapse", "inhibitory", self.inhibitory_params)
         if self.stdp:
             nest.CopyModel("stdp_synapse", "excitatory_stdp", self.stdp_params)
-        else:
+        else:   
             nest.CopyModel("static_synapse", "excitatory_stdp", self.static_params)
         nest.CopyModel("static_synapse", "stimulus", self.stimulus_params)
+        nest.CopyModel("static_synapse", "excitatory_static", self.static_params)
 
         # Connecting nodes
-        nest.Connect(noise, self.nodes_ex + self.nodes_in, conn_spec = "one_to_one", syn_spec="background")
-        nest.Connect(self.nodes_ex, self.nodes_ex + self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_stdp")
-        nest.Connect(self.nodes_in, self.nodes_ex + self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="inhibitory")
+        nest.Connect(noise, self.nodes_ex + self.nodes_in, conn_spec = "one_to_one", syn_spec="background") # Background noise to all neurons : static synapse
+        nest.Connect(self.nodes_ex, self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # E -> I : Static synapse
+        nest.Connect(self.nodes_ex, self.nodes_ex, conn_spec=self.bernoulli_conn, syn_spec="excitatory_stdp") # E -> E : Static synapse
+
+        nest.Connect(self.nodes_in, self.nodes_ex + self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="inhibitory") # I -> (E + I) : Static synapse
         
         # Connect all neurons to spike recorders 
         nest.Connect(self.nodes_ex, self.espikes)
         nest.Connect(self.nodes_in, self.ispikes)
 
         if self.input is not None:
-            # Create one poisson generator for each feature
-            feature_rates = self.input.flatten().astype(float)
-            self.feature_generators = []
-
-            for i, r in enumerate(feature_rates):
+            self.feature_generators = [] 
+            for i in range(self.n_features):
+                gens = nest.Create("poisson_generator", self.group_size, params={"rate": 0.0})
                 start = i * self.group_size
                 stop = (i + 1) * self.group_size
-                target_block = self.nodes_ex[start:stop]
-
-                gens = nest.Create("poisson_generator", self.group_size, params={"rate": float(r)})
-                nest.Connect(gens, target_block, conn_spec = "one_to_one", syn_spec="stimulus")
+                nest.Connect(gens, self.nodes_ex[start:stop], conn_spec = "one_to_one", syn_spec="stimulus")
                 self.feature_generators.append(gens)
 
 
+
     
-        
-
     def give_input(self, input):
-        pass
+        if np.shape(input)[0] != 1 or not isinstance(input, np.ndarray):
+            raise ValueError(f"Input data must be of shape (1, N_features). And it also has to be numpy array \\ Input gotten is {np.shape(input)} and type {type(input)}")
+
+        # Create one poisson generator for each feature
+        feature_rates = input.flatten().astype(float)
+        for gens, r in zip(self.feature_generators, feature_rates):
+            nest.SetStatus(gens, {"rate": r})
             
-            
 
-
-
+  
     def simulate(self):
-        print("Simulating running...")
+        print("Simulation running...")
         nest.Simulate(self.simtime)
+    
+
+    def get_spike_vector_window(self, t_start, t_end, N=200):
+        """
+        Spike counts per excitatory neuron for spikes with t_start < time <= t_end,
+        excluding the first N excitatory neurons.
+        """
+        ex_ids = np.asarray(self.nodes_ex, dtype=np.int64)
+
+        events_ex = self.espikes.events
+        times = np.asarray(events_ex["times"], dtype=float)
+        senders = np.asarray(events_ex["senders"], dtype=np.int64)
+
+        # window mask
+        m = (times > t_start) & (times <= t_end)
+        senders_w = senders[m]
+
+        spike_counts_ex = np.bincount(senders_w - ex_ids[0], minlength=len(ex_ids))
+        return spike_counts_ex[N:]
 
     def get_spike_vector(self, N=200):
         """
@@ -184,28 +203,35 @@ class Brunel:
         spike_counts_ex_trunc = spike_counts_ex[N:]
         
         return spike_counts_ex_trunc
+
+
+
         
-    def get_average_firing(self, N=200):
-        events_ex = self.espikes.n_events
-        events_in = self.ispikes.n_events
-        firing_rate_ex = events_ex / self.simtime * 1000.0 / self.NE
-        firing_rate_in = events_in / self.simtime * 1000.0 / self.NI
+    def get_firing_rates_window(self, t_start, t_end):
+        dt_s = (t_end - t_start) / 1000.0
 
-        events = self.espikes.events
-        senders = np.asarray(events["senders"], dtype=np.int64)
-        first_ex_ids = np.asarray(self.nodes_ex[:N].tolist(), dtype=np.int64)
-        spike_count = np.isin(senders, first_ex_ids).sum()
-        firing_rate_N = spike_count / self.simtime * 1000.0 / N
+        # Excitatory spikes in window
+        ev_ex = self.espikes.events
+        times_ex = np.asarray(ev_ex["times"], dtype=float)
+        senders_ex = np.asarray(ev_ex["senders"], dtype=np.int64)
 
-        print("======== Quick Summary of the firing rates =======")
-        print(f"Number of spikes in excitatory neurons: {events_ex}")
-        print(f"Number of spikes in inhibitory neurons: {events_in}")
-        print(f"Average firing rate of excitatory neurons: {firing_rate_ex:.2f} Hz")
-        print(f"Average firing rate of inhibitory neurons: {firing_rate_in:.2f} Hz")
-        print(f"Average firing rate of first {N} excitatory neurons: {firing_rate_N:.2f} Hz")
-        print(f"p rate: {self.p_rate:.2f} Hz")
+        m_ex = (times_ex > t_start) & (times_ex <= t_end)
+        n_spikes_ex = m_ex.sum()
+        fr_ex = n_spikes_ex / dt_s / self.NE
 
-    def get_stdp_weights(self, bins=100, show_top_bottom=False, plot=True, return_weights=False):
+        # Inhibitory spikes in window
+        ev_in = self.ispikes.events
+        times_in = np.asarray(ev_in["times"], dtype=float)
+        m_in = (times_in > t_start) & (times_in <= t_end)
+        n_spikes_in = m_in.sum()
+        fr_in = n_spikes_in / dt_s / self.NI
+
+
+
+        return fr_ex, fr_in
+
+
+    def get_stdp_weights(self, bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="weights"):
         """
         Plot histogram of weights for synapses that use the 'excitatory_stdp' model.
         Also print the top 10 synapses with highest and lowest weights after simulation.
@@ -252,10 +278,13 @@ class Brunel:
             # Annotate mean and std in the top right corner
             plt.legend()
             plt.tight_layout()
-            plt.show()
+            plt.savefig(f"data/{folder_name}/stdp_weights_{time.time()}.png")
+            #plt.show()
 
         if return_weights:
             return w_E
+
+    
 
 
     
@@ -282,6 +311,7 @@ class Brunel:
         plt.xlim([0, self.simtime])
         plt.legend(markerscale=6, loc='upper right')
         plt.tight_layout()
+        #plt.savefig(f"data/raster_plot_{time.time()}.png")
         plt.show()
 
 
