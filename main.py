@@ -6,6 +6,8 @@ import numpy as np
 from tqdm import tqdm
 import time
 import nest
+import os
+from datetime import datetime
 
 from sklearn.datasets import load_iris
 
@@ -17,18 +19,33 @@ def freeze_stdp(brunel):
 def reset_state(brunel):
     nest.SetStatus(brunel.nodes_ex + brunel.nodes_in, {"V_m": 0.0})
 
+
+
+
+
 iris = load_iris()
 X_iris = iris.data
 y_iris = iris.target
 
 
 preprocessing = Preprocessing()
-#X, y = preprocessing.import_iris_dataset()
-X, y = preprocessing.import_moon_dataset()
-#X_brunel = np.load("data/spike_matrix.npy")
+#dataset_info, X, y = preprocessing.import_iris_dataset()
+dataset_info, X, y = preprocessing.import_moon_dataset(plot=False)
+#dataset_info, X, y = preprocessing.import_circles_dataset(plot=False)
 
 # readout = Readout(X_brunel, y)
 # readout.cross_validation_pca()
+
+
+
+
+# Prepare the filename and string to save
+now = datetime.now()
+filename = f"data/info_{now.strftime('%Y%m%d_%H%M%S')}.txt"
+
+
+
+
 
 
 
@@ -60,8 +77,8 @@ X, y = preprocessing.import_moon_dataset()
 ##########################
 
 brunel = Brunel(input=X[0].reshape(1, -1), stdp=True, reset=True, N_neurons=5000)
-brunel.print_summary()
-# brunel.build_network()
+summary = brunel.print_summary()
+#brunel.build_network()
 
 # brunel.simtime = 200.0
 # rng = np.random.RandomState(0)
@@ -112,7 +129,25 @@ brunel.print_summary()
 # #spike_matrix = np.asarray(spike_matrix, dtype=float)
 # #np.save("data/spike_matrix.npy", spike_matrix)
 # spike_matrix = np.load("data/spike_matrix.npy")
-# readout = Readout(spike_matrix, y)
-# readout.cross_validation_pca()
+
+readout = Readout(X, y)
+summary_readout = readout.cross_validation_pca()
+
+
+# Save to file
+with open(filename, "w") as f:
+    f.write("======== Dataset information: ========")
+    f.write("\n")
+    f.write(f"{dataset_info}")
+    f.write("\n")
+    f.write("\n")
+    f.write("======== Brunel summary: ========")
+    f.write("\n")
+    f.write(summary)
+    f.write("\n")
+    f.write("\n")
+    f.write("======== Readout summary: ========")
+    f.write("\n")
+    f.write(summary_readout)
 
 

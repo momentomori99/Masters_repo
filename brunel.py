@@ -39,9 +39,6 @@ class Brunel:
         self.CI = int(self.epsilon * self.NI)  # number of inhibitory synapses per neuron
         self.C_tot = int(self.CI + self.CE)  # total number of synapses per neuron
 
-        print("CE", self.CE)
-        print("CI", self.CI)
-        print("C_tot", self.C_tot)
 
         # LIF neuron parameters
         self.tauSyn = 0.5 # synaptic time constant in ms
@@ -53,12 +50,14 @@ class Brunel:
         self.J_unit = self.ComputePSPnorm(self.tauMem, self.CMem, self.tauSyn) # [mV / pA]
         self.J_ex = self.J / self.J_unit  # amplitude of excitatory postsynaptic potential [pA]
         self.J_in = -self.g * self.J_ex  # amplitude of inhibitory postsynaptic potential [pA]
-        self.stim_weight = 80 * self.J_ex
+        self.stim_weight_scaler = 80
+        self.stim_weight = self.stim_weight_scaler * self.J_ex
 
         # Threshold rate, external firing rate and converted spikes per second
         self.nu_th = (self.theta * self.CMem) / (self.J_ex * self.CE * np.exp(1.0) * self.tauMem * self.tauSyn)
         self.nu_ex = self.eta * self.nu_th 
-        self.p_rate = (1000.0 * self.nu_ex * self.CE) / 1.1# Multiply be 1000 to convert to Hz
+        self.p_rate_scaler = 1.1
+        self.p_rate = (1000.0 * self.nu_ex * self.CE) / self.p_rate_scaler# Multiply be 1000 to convert to Hz
 
         # Synapse parameters
         self.stdp = stdp
@@ -70,28 +69,35 @@ class Brunel:
 
         self.input = input
         if input is not None:
-            
+            self.procentage_to_group = 0.05
             self.n_features = np.shape(self.input)[1]
-            self.group_size = int(self.N_neurons * 0.05)
+            self.group_size = int(self.N_neurons * self.procentage_to_group)
             self.feature_size = self.group_size * self.n_features
                 
 
         
     def print_summary(self):
-        print("======== Quick Summary of some of the parameters =======")
-        print(f"Number of neurons: {self.N_neurons}")
-        print(f"Number of inhibitory neurons: {self.NI}")
-        print(f"Number of excitatory neurons: {self.NE}")
-        #print(f"Number of recorded excitatory neurons: {self.N_rec}")
-        print(f"Relative inhibitory strength: {self.g}")
-        print(f"External rate in units of threshold: {self.eta}")
-        print(f"Connection probability: {self.epsilon}")
-        print(f"Simulation time: {self.simtime}")
-        #print(f"Synaptic delay: {self.delay}")
-        print("--------------------------------")
-        print(f"Number of features: {self.n_features}")
-        print(f"Group size: {self.group_size}")
-        print(f"Feature size: {self.feature_size}")
+        summary = ""
+        summary += "======== Quick Summary of some of the parameters ========\n"
+        summary += f"Number of neurons: {self.N_neurons}\n"
+        summary += f"Number of inhibitory neurons: {self.NI}\n"
+        summary += f"Number of excitatory neurons: {self.NE}\n"
+        summary += f"Relative inhibitory strength: {self.g}\n"
+        summary += f"External rate in units of threshold: {self.eta}\n"
+        summary += f"Connection probability: {self.epsilon}\n"
+        summary += f"Simulation time: {self.simtime} ms\n"
+        summary += "--------------------------------\n"
+        summary += f"Number of features: {self.n_features}\n"
+        summary += f"Procentage of total neurons to be grouped: {self.procentage_to_group * 100}%\n"
+        summary += f"Group size: {self.group_size}\n"
+        summary += f"Feature size: {self.feature_size}\n"
+        summary += "--------------------------------\n"
+        summary += f"Stimulus weight scaler: {self.stim_weight_scaler}\n"
+        summary += f"STDP: {self.stdp}\n"
+        summary += f"P rate scaler: {self.p_rate_scaler}\n"
+        summary += f"P rate: {self.p_rate:.2f} Hz\n"
+        print(summary)
+        return summary
     
     def LambertWm1(self, x):
         return sp.lambertw(x, k=-1 if x < 0 else 0).real
@@ -166,7 +172,7 @@ class Brunel:
         nest.Simulate(self.simtime)
     
 
-    def get_spike_vector_window(self, t_start, t_end, N=200):
+    def get_spike_vector_window(self, t_start, t_end):
         """
         Spike counts per excitatory neuron for spikes with t_start < time <= t_end,
         excluding the first N excitatory neurons.
@@ -182,9 +188,9 @@ class Brunel:
         senders_w = senders[m]
 
         spike_counts_ex = np.bincount(senders_w - ex_ids[0], minlength=len(ex_ids))
-        return spike_counts_ex[N:]
+        return spike_counts_ex[self.feature_size:]
 
-    def get_spike_vector(self, N=200):
+    def get_spike_vector(self):
         """
         Returns a vector of spike counts for each excitatory neuron recorded in espikes,
         EXCLUDING the first N excitatory neurons. (Inhibitory neurons are ignored.)
@@ -200,7 +206,7 @@ class Brunel:
         spike_counts_ex = np.bincount(senders_ex - ex_ids[0], minlength=len(ex_ids))
         
         # Exclude the first N excitatory neurons
-        spike_counts_ex_trunc = spike_counts_ex[N:]
+        spike_counts_ex_trunc = spike_counts_ex[self.feature_size:]
         
         return spike_counts_ex_trunc
 
