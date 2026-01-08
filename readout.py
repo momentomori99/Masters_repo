@@ -1,6 +1,6 @@
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.model_selection import StratifiedKFold, cross_validate, StratifiedShuffleSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
@@ -30,7 +30,7 @@ class Readout:
     def cross_validation(self, cv_fold = 5):
         return self.cross_validation_pca(n_components=None, cv_fold=cv_fold)
 
-    def cross_validation_pca(self, n_components=50, cv_fold=5):
+    def cross_validation_pca(self, n_components=80, cv_fold=5):
         """
         Cross-validated accuracy with optional PCA.
 
@@ -47,7 +47,7 @@ class Readout:
         steps.append(("clf", LogisticRegression(max_iter=1000)))
 
         model = Pipeline(steps)
-        cv = StratifiedKFold(n_splits=cv_fold, shuffle=True, random_state=42)
+        cv = StratifiedShuffleSplit(n_splits=cv_fold, test_size = 0.3, train_size = 0.7, random_state=42)
         scores = cross_validate(model, self.X, self.y, cv=cv, scoring='accuracy', return_train_score=True)
         print(f"Fold accuracies: {scores['test_score']}")
         print(f"Mean accuracy: {scores['test_score'].mean():.4f} ± {scores['test_score'].std():.4f}")
