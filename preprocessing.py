@@ -8,10 +8,10 @@ class Preprocessing:
         self.scaler = MinMaxScaler() 
         self.r_min = 1
         self.r_max = 50
-        self.rate_scale = 20
+        self.rate_scale = 5
         self.noise = 0.1
 
-    def import_iris_dataset(self, r_min=7, r_max=50):
+    def import_iris_dataset(self):
         """
         Import the iris dataset and preprocess it.
 
@@ -31,6 +31,7 @@ class Preprocessing:
         r = self.r_min + X_normalized * (self.r_max - self.r_min)
 
         summary = ""
+        summary += f"Dataset: iris\n"
         summary += f"Number of samples: {len(X)}\n"
         summary += f"Number of features: {len(X[0])}\n"
         summary += f"Noise: 0\n"
@@ -44,6 +45,12 @@ class Preprocessing:
         moons = make_moons(n_samples=150, noise=self.noise)
         X = np.array(moons[0])
         y = np.array(moons[1])
+        # Order X and y by class: all class 0s first, then class 1s
+        idx_class0 = np.where(y == 0)[0]
+        idx_class1 = np.where(y == 1)[0]
+        idx_sorted = np.concatenate([idx_class0, idx_class1])
+        X = X[idx_sorted]
+        y = y[idx_sorted]
 
         if plot:
             for i in range(len(y)):
@@ -57,6 +64,7 @@ class Preprocessing:
         r = self.r_min + X_normalized * (self.r_max - self.r_min)
 
         summary = ""
+        summary += f"Dataset: moons\n"
         summary += f"Number of samples: {len(X)}\n"
         summary += f"Number of features: {len(X[0])}\n"
         summary += f"Noise: {self.noise}\n"
@@ -71,6 +79,12 @@ class Preprocessing:
         X = np.array(circles[0])
         y = np.array(circles[1])
 
+        idx_class0 = np.where(y == 0)[0]
+        idx_class1 = np.where(y == 1)[0]
+        idx_sorted = np.concatenate([idx_class0, idx_class1])
+        X = X[idx_sorted]
+        y = y[idx_sorted]
+
         if plot:
             for i in range(len(y)):
                 if y[i] == 0:
@@ -81,14 +95,15 @@ class Preprocessing:
 
         X_normalized = self.scaler.fit_transform(X)
         r = self.r_min + X_normalized * (self.r_max - self.r_min)
-        info = {"dataset": "circles", 
-                    "n_samples": len(X), 
-                    "n_features": len(X[0]), 
-                    "noise": self.noise, 
-                    "r_min": self.r_min, 
-                    "r_max": self.r_max, 
-                    "rate_scale": self.rate_scale}
-        return info, r*self.rate_scale, y
+        summary = ""
+        summary += f"Dataset: circles\n"
+        summary += f"Number of samples: {len(X)}\n"
+        summary += f"Number of features: {len(X[0])}\n"
+        summary += f"Noise: {self.noise}\n"
+        summary += f"r_min: {self.r_min}\n"
+        summary += f"r_max: {self.r_max}\n"
+        summary += f"rate_scale: {self.rate_scale}\n"
+        return summary, r*self.rate_scale, y
 
 
 if __name__ == "__main__":

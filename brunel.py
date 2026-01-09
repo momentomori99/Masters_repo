@@ -26,8 +26,8 @@ class Brunel:
 
         self.simtime = 1000.0  # Simulation time (ms)
         self.delay = 1.5  # Synaptic delay (ms)
-        self.g = 4.5  # Relative inhibitory strength
-        self.eta = 1.0  # External rate in units of threshold
+        self.g = 4.0  # Relative inhibitory strength
+        self.eta = 1.1  # External rate in units of threshold
         self.epsilon = 0.1  # Connection probability
         self.N_neurons = N_neurons  # Total number of neurons
         self.NI = self.N_neurons // 5  # Number of inhibitory neurons
@@ -46,11 +46,11 @@ class Brunel:
         self.CMem = 250.0 # capacitance in pF
         self.theta = 20.0  # membrane threshold potential in mV
         self.neuron_params = {"C_m": self.CMem, "tau_m": self.tauMem, "tau_syn_ex": self.tauSyn, "tau_syn_in": self.tauSyn, "t_ref": 2.0, "E_L": 0.0, "V_reset": 0.0, "V_m": 0.0, "V_th": self.theta}
-        self.J = 0.1  # postsynaptic amplitude in mV
+        self.J = 0.15  # postsynaptic amplitude in mV
         self.J_unit = self.ComputePSPnorm(self.tauMem, self.CMem, self.tauSyn) # [mV / pA]
         self.J_ex = self.J / self.J_unit  # amplitude of excitatory postsynaptic potential [pA]
         self.J_in = -self.g * self.J_ex  # amplitude of inhibitory postsynaptic potential [pA]
-        self.stim_weight_scaler = 80
+        self.stim_weight_scaler = 40
         self.stim_weight = self.stim_weight_scaler * self.J_ex
 
         # Threshold rate, external firing rate and converted spikes per second
@@ -61,7 +61,7 @@ class Brunel:
 
         # Synapse parameters
         self.stdp = stdp
-        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.001, "alpha": 0.5,  "Wmax": 30.0}
+        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.001, "alpha": 1.05,  "Wmax": 100.0}
         self.static_params = {"weight": self.J_ex, "delay": self.delay}
         self.inhibitory_params = {"weight": self.J_in, "delay": self.delay}
         self.bernoulli_conn = {"rule": "pairwise_bernoulli", "p": self.epsilon, "allow_autapses": False}
@@ -115,7 +115,7 @@ class Brunel:
         # Creating nodes
         self.nodes_ex = nest.Create("iaf_psc_alpha", self.NE, params=self.neuron_params)
         self.nodes_in = nest.Create("iaf_psc_alpha", self.NI, params=self.neuron_params)
-        noise = nest.Create("poisson_generator", self.N_neurons, params={"rate": self.p_rate})
+        self.noise = nest.Create("poisson_generator", self.N_neurons, params={"rate": self.p_rate})
         self.espikes = nest.Create("spike_recorder")
         self.ispikes = nest.Create("spike_recorder")
 
@@ -134,9 +134,9 @@ class Brunel:
         nest.CopyModel("static_synapse", "excitatory_static", self.static_params)
 
         # Connecting nodes
-        nest.Connect(noise, self.nodes_ex + self.nodes_in, conn_spec = "one_to_one", syn_spec="background") # Background noise to all neurons : static synapse
+        nest.Connect(self.noise, self.nodes_ex + self.nodes_in, conn_spec = "one_to_one", syn_spec="background") # Background noise to all neurons : static synapse
         nest.Connect(self.nodes_ex, self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # E -> I : Static synapse
-        nest.Connect(self.nodes_ex, self.nodes_ex, conn_spec=self.bernoulli_conn, syn_spec="excitatory_stdp") # E -> E : Static synapse
+        nest.Connect(self.nodes_ex, self.nodes_ex, conn_spec=self.bernoulli_conn, syn_spec="excitatory_stdp") # E -> E : STDP synapse
 
         nest.Connect(self.nodes_in, self.nodes_ex + self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="inhibitory") # I -> (E + I) : Static synapse
         
@@ -188,9 +188,9 @@ class Brunel:
         senders_w = senders[m]
 
         spike_counts_ex = np.bincount(senders_w - ex_ids[0], minlength=len(ex_ids))
-        return spike_counts_ex[self.feature_size:]
+        return spike_counts_ex#[self.feature_size:]
 
-    def get_spike_vector(self):
+    def get_spike_vector(self,):
         """
         Returns a vector of spike counts for each excitatory neuron recorded in espikes,
         EXCLUDING the first N excitatory neurons. (Inhibitory neurons are ignored.)
@@ -206,7 +206,9 @@ class Brunel:
         spike_counts_ex = np.bincount(senders_ex - ex_ids[0], minlength=len(ex_ids))
         
         # Exclude the first N excitatory neurons
-        spike_counts_ex_trunc = spike_counts_ex[self.feature_size:]
+        #spike_counts_ex_trunc = spike_counts_ex[self.feature_size:]
+        spike_counts_ex_trunc = spike_counts_ex
+
         
         return spike_counts_ex_trunc
 
@@ -284,13 +286,44 @@ class Brunel:
             # Annotate mean and std in the top right corner
             plt.legend()
             plt.tight_layout()
-            plt.savefig(f"data/{folder_name}/stdp_weights_{time.time()}.png")
-            #plt.show()
+            #plt.savefig(f"data/{folder_name}/stdp_weights_{time.time()}.png")
+            plt.show()
 
         if return_weights:
             return w_E
 
-    
+    def plot_weight_matrix(self):
+        
+        all_nodes = self.nodes_ex + self.nodes_in
+        all_gids = np.asarray(all_nodes, dtype=int)
+
+        gid_to_idx = {gid: i for i, gid in enumerate(all_gids)}
+
+        N = len(all_gids)
+        A = np.zeros((N, N))
+
+        # This now works
+        conns = nest.GetConnections(all_nodes, all_nodes)
+
+        sources = conns.get("source")
+        targets = conns.get("target")
+        weights = conns.get("weight")
+
+        for s, t, w in zip(sources, targets, weights):
+            A[gid_to_idx[s], gid_to_idx[t]] = w
+
+        max_n = 600
+        A_plot = A[:max_n, :max_n]
+
+        plt.figure(figsize=(7, 6))
+        plt.imshow(A_plot, aspect="auto")
+        plt.colorbar(label="weight")
+        plt.xlabel("target neuron index")
+        plt.ylabel("source neuron index")
+        plt.title("Full synaptic weight matrix (cropped)")
+        plt.tight_layout()
+        plt.show()
+                    
 
 
     
