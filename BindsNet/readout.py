@@ -4,66 +4,58 @@ from tqdm import tqdm
 
 class NN(nn.Module):
     def __init__(self, input_size, num_classes):
-        super(NN, self).__init__()
-        self.linear_1 = nn.Linear(input_size, num_classes)
+        super().__init__()
+        self.linear = nn.Linear(input_size, num_classes)
 
     def forward(self, x):
-        out = torch.sigmoid(self.linear_1(x.float().view(-1)))
-        return out
-
+        # x: (input_size,) or (1, input_size)
+        x = x.float().view(1, -1)
+        return self.linear(x)  # logits: (1, num_classes)
 
 class Readout:
     def __init__(self, input_size, num_classes):
-        self.num_classes = num_classes
-        
-
         self.model = NN(input_size, num_classes).to("cpu")
-        self.criterion = torch.nn.MSELoss(reduction="sum")
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-4, momentum=0.9)
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode='min', factor=0.5, patience=20
+        )
 
     def train_readout(self, training_pairs, n_epochs):
         self.model.train()
         pbar = tqdm(range(n_epochs), desc="Training readout")
         for epoch in pbar:
-            avg_loss = 0.0
+            total_loss = 0.0
 
-            for s, l in training_pairs:
-                # Reset gradients
+            import random
+            shuffled_pairs = training_pairs.copy()
+            random.shuffle(shuffled_pairs)
+
+            for s, l in shuffled_pairs:
                 self.optimizer.zero_grad()
-
-                # Forward pass
-                outputs = self.model(s)
-
-                # One-hot label target
-                target = torch.zeros(1, 1, self.num_classes).float()
-                target[0, 0, int(l)] = 1.0
-
-                # Compute loss (match your original logic)
-                loss = self.criterion(outputs.view(1, 1, -1), target)
-                avg_loss += loss.item()
-
-                # Backprop + step
+                logits = self.model(s)  # (1, C)
+                target = torch.tensor([int(l)], dtype=torch.long)  # (1,)
+                loss = self.criterion(logits, target)
+                total_loss += loss.item()
                 loss.backward()
                 self.optimizer.step()
-
+            avg_loss = total_loss / len(training_pairs)
+            self.scheduler.step(avg_loss)
             pbar.set_description_str(
-                f"Epoch: {epoch+1}/{n_epochs}, Loss: {avg_loss / len(training_pairs):.4f}"
+                f"Epoch: {epoch+1}/{n_epochs}, Loss: {avg_loss:.4f}"
             )
+
     def test_readout(self, test_pairs):
         self.model.eval()
-
         correct = 0
         total = 0
 
         with torch.no_grad():
             for s, label in test_pairs:
-                outputs = self.model(s)
-
-                # same logic as original code
-                _, predicted = torch.max(outputs.data.unsqueeze(0), 1)
+                logits = self.model(s)              # (1, C)
+                pred = logits.argmax(dim=1).item()  # int
 
                 total += 1
-                correct += int(predicted == int(label))
+                correct += int(pred == int(label))
 
-        accuracy = 100.0 * correct / total if total > 0 else 0.0
-        return accuracy
+        return 100.0 * correct / total if total else 0.0
