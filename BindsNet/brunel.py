@@ -19,13 +19,11 @@ class Brunel:
         self.n_neurons = int(n_neurons)                                 # Total number of neurons
         self.N_E = int(0.8 * self.n_neurons)                            # Number of excitatory neurons
         self.N_I = self.n_neurons - self.N_E                            # Number of inhibitory neurons
-        #self.N_noise = self.n_neurons                        # Number of noise neurons
 
         # Connectivity/synapse parameters
         self.epsilon = 0.1                                              # Connection probability [ ]
         self.g = 6.0                                                  # Relative inhibitory strength [ ]
         self.eta = 0.6
-        self.K_noise = 1000 # number of external afferents
 
         self.w_E = 1.0                                                  # (Excitatory ->) synapse weight [ ]
         self.w_ext = 10.0                                              # (Noise ->) synapse weight [ ]
@@ -34,10 +32,10 @@ class Brunel:
         else:
             self.w_input = 0.0
 
-        #self.J = 0.1                                                    # Voltage amplitude jump [mV]
+        self.J = 0.1                                                    # Voltage amplitude jump [mV]
         #self.J_E = self.w_E * self.J                                    # Excitatory voltage amplitude jump [mV]
         #self.J_I = -self.g * self.J_E                                   # Inhinbitory voltage amplitude jump [mV]
-        #self.J_input = self.w_input * self.J                            # Input voltage amplitude jump [mV]
+        self.J_input = self.w_input * self.J                            # Input voltage amplitude jump [mV]
         #self.J_noise = self.w_noise * self.J                            # Noise voltage amplitude jump [mV]
         #self.J_std = 0.1 * abs(self.J)
         # Single neuron paramerers
@@ -140,29 +138,28 @@ class Brunel:
         self.network.add_layer(self.neurons_I, name="I")
 
         # Noise Inputs
-        self.X_E = Input(n=self.N_E)
-        self.X_I = Input(n=self.N_I)
-        self.network.add_layer(self.X_E, name="X_E")
-        self.network.add_layer(self.X_I, name="X_I")
-        #p_noise_E, p_noise_I = self.C_noise / self.N_noise, self.C_noise / self.N_noise
+        self.noise_E = Input(n=self.N_E)
+        self.noise_I = Input(n=self.N_I)
+        self.network.add_layer(self.noise_E, name="noise_E")
+        self.network.add_layer(self.noise_I, name="noise_I")
 
-        conn_XE = Connection(source=self.X_E, target=self.neurons_E, w=self.w_ext * torch.eye(self.N_E))
-        conn_XI = Connection(source=self.X_I, target=self.neurons_I, w=self.w_ext * torch.eye(self.N_I))
-
+        connection_noise_E = Connection(source=self.noise_E, target=self.neurons_E, w=self.w_ext * torch.eye(self.N_E))
+        connection_noise_I = Connection(source=self.noise_I, target=self.neurons_I, w=self.w_ext * torch.eye(self.N_I))
 
 
-        # # Input (MNIST) to Excitatory Neurons
-        # input_indices = torch.randint(0, 784, (self.N_E,)) # Which input neurons feeds excitatory neuron j
-        # self.W = torch.zeros(784, self.N_E)
-        # for j in range(self.N_E):
-        #     i = input_indices[j]
-        #     self.W[i, j] = float(self.J_input)
 
-        # self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
-        # self.network.add_layer(self.mnist_in, name="MNIST")
-        # #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
-        # connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W)
-        # self.network.add_connection(connection_mnist_E, source="MNIST", target="E")
+        # Input (MNIST) to Excitatory Neurons
+        input_indices = torch.randint(0, 784, (self.N_E,)) # Which input neurons feeds excitatory neuron j
+        self.W = torch.zeros(784, self.N_E)
+        for j in range(self.N_E):
+            i = input_indices[j]
+            self.W[i, j] = float(self.J_input)
+
+        self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
+        self.network.add_layer(self.mnist_in, name="MNIST")
+        #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
+        connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W)
+        self.network.add_connection(connection_mnist_E, source="MNIST", target="E")
 
         # each excitatory neuron has exactly one input
         #assert torch.all((self.W != 0).sum(dim=0) == 1) # Sanity check
@@ -176,39 +173,26 @@ class Brunel:
         mask_EI = torch.bernoulli(torch.full((self.N_E, self.N_I), self.epsilon))
         mask_IE = torch.bernoulli(torch.full((self.N_I, self.N_E), self.epsilon))
         mask_II = torch.bernoulli(torch.full((self.N_I, self.N_I), self.epsilon))
-        #mask_noise_E = torch.bernoulli(torch.full((self.N_noise, self.N_E), p_noise_E))
-        #mask_noise_I = torch.bernoulli(torch.full((self.N_noise, self.N_I), p_noise_I))
 
         # Weights
-        #W_EE = mask_EE * torch.normal(self.J_E, self.J_std, size=(self.N_E, self.N_E)).clamp(min=0.0)  
         W_EE = mask_EE * torch.normal(self.mean_w_EE, self.std_w_EE, size=(self.N_E, self.N_E))
-        #W_EI = mask_EI * torch.normal(self.J_E, self.J_std, size=(self.N_E, self.N_I)).clamp(min=0.0)   
         W_EI = mask_EI * torch.normal(self.mean_w_EI, self.std_w_EI, size=(self.N_E, self.N_I))
-        #W_IE = mask_IE * torch.normal(self.J_I, self.J_std, size=(self.N_I, self.N_E)).clamp(max=0.0)
         W_IE = mask_IE * torch.normal(self.mean_w_IE, self.std_w_IE, size=(self.N_I, self.N_E))
-        #W_II = mask_II * torch.normal(self.J_I, self.J_std, size=(self.N_I, self.N_I)).clamp(max=0.0)
         W_II = mask_II * torch.normal(self.mean_w_II, self.std_w_II, size=(self.N_I, self.N_I))
-        #W_noise_E = mask_noise_E * self.J_noise
-        #W_noise_I = mask_noise_I * self.J_noise
 
-        conn_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE)
-        conn_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=W_EI)
-        conn_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
-        conn_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
 
-        self.network.add_connection(conn_XE, source="X_E", target="E")
-        self.network.add_connection(conn_XI, source="X_I", target="I")
-        self.network.add_connection(conn_EE, source="E", target="E")
-        self.network.add_connection(conn_EI, source="E", target="I")
-        self.network.add_connection(conn_IE, source="I", target="E")
-        self.network.add_connection(conn_II, source="I", target="I")
+        connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE)
+        connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=W_EI)
+        connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
+        connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
 
-        # self.network.add_connection(Connection(self.neurons_E, self.neurons_E, w=W_EE), source="E", target="E")
-        # self.network.add_connection(Connection(self.neurons_E, self.neurons_I, w=W_EI), source="E", target="I")
-        # self.network.add_connection(Connection(self.neurons_I, self.neurons_E, w=W_IE), source="I", target="E")
-        # self.network.add_connection(Connection(self.neurons_I, self.neurons_I, w=W_II), source="I", target="I")
-        # self.network.add_connection(Connection(self.noise, self.neurons_E, w=W_noise_E), source="noise", target="E")
-        # self.network.add_connection(Connection(self.noise, self.neurons_I, w=W_noise_I), source="noise", target="I")
+        self.network.add_connection(connection_noise_E, source="noise_E", target="E")
+        self.network.add_connection(connection_noise_I, source="noise_I", target="I")
+        self.network.add_connection(connection_EE, source="E", target="E")
+        self.network.add_connection(connection_EI, source="E", target="I")
+        self.network.add_connection(connection_IE, source="I", target="E")
+        self.network.add_connection(connection_II, source="I", target="I")
+
 
         # Monitors
         T = int(self.time / self.dt)
@@ -274,13 +258,18 @@ class Brunel:
     # Helper methods:
     def run(self, image):
 
+        mnist_spikes = image.view(self.time, 1, 784).to("cpu") # (T, 1, 784)
+
         encoder = PoissonEncoder(time=1)
-        for _ in range(self.time):
+        for t in range(self.time):
             rates_XE = torch.ones(self.N_E) * self.rate_ext
             rates_XI = torch.ones(self.N_I) * self.rate_ext
             spikes_XE = encoder(rates_XE)
             spikes_XI = encoder(rates_XI)
-            self.network.run(inputs={"X_E": spikes_XE.unsqueeze(0), "X_I": spikes_XI.unsqueeze(0)}, time=1)
+
+            mnist_t = mnist_spikes[t:t+1] # (1, 1, 784)
+            self.network.run(inputs={"noise_E": spikes_XE.unsqueeze(0), "noise_I": spikes_XI.unsqueeze(0), "MNIST": mnist_t}, time=1)
+
         E_spikes = self.mon_E.get("s") # shape (T, 1, N_E)
         I_spikes = self.mon_I.get("s") # shape (T, 1, N_I)
         E_spike_counts = E_spikes.squeeze(1).sum(0) # shape (N_E,)
