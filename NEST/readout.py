@@ -30,7 +30,7 @@ class Readout:
     def cross_validation(self, cv_fold = 5):
         return self.cross_validation_pca(n_components=None, cv_fold=cv_fold)
 
-    def cross_validation_pca(self, n_components=2, cv_fold=5):
+    def cross_validation_pca(self, n_components=50, cv_fold=5):
         """
         Cross-validated accuracy with optional PCA.
 

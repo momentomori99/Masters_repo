@@ -1,0 +1,274 @@
+==================================
+Baseline performance, take straight out from the repository, with minor changes.
+Number of neurons: 800
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+Accuracy: 56.40%
+==================================
+==================================
+Changed the number of neurons to 1000.
+Number of neurons: 1000
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+Accuracy: 62.60%
+==================================
+
+
+==================================
+changed the logic of how the reservoir is trained, from spike matrix to spike counts.
+Number of neurons: 800
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+Accuracy: 78.60%
+==================================
+==================================
+changed the logic of how the reservoir is trained, from spike matrix to spike counts.
+Number of neurons: 1000
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+Accuracy: 84.40%
+==================================
+==================================
+Implemented Brunel-like reservoir with Poisson input and external drive.
+Number of neurons: 800
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 4.0
+w_ext: 2.0
+rate_ext: 50.0
+w_mnist: 0.2
+readout_from: E
+Accuracy: 80.80%
+
+extra comment: Debug raster plot showed a clear synchronous pattern.
+==================================
+==================================
+Implemented Brunel-like reservoir with Poisson input and external drive, and just increased the number of neurons.
+Number of neurons: 1000
+Number of epochs: 100
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 4.0
+w_ext: 2.0
+rate_ext: 50.0
+w_mnist: 0.2
+readout_from: E
+Accuracy: 78.00%
+==================================
+==================================
+Implemented Brunel-like reservoir with Poisson input and external drive.
+Number of neurons: 1000
+Number of epochs: 500
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 4.0
+w_ext: 2.0
+rate_ext: 60.0
+w_mnist: 0.25
+readout_from: E
+Accuracy: 77.60%
+==================================
+==================================
+Implemented Brunel-like reservoir with Poisson input and external drive.
+Number of neurons: 1000
+Number of epochs: 500
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 5.0
+w_ext: 2.0
+rate_ext: 100.0
+w_mnist: 0.4
+readout_from: E
+Accuracy: 79.20%
+==================================
+==================================
+I now have included STDP
+Number of neurons: 800
+Number of epochs: 500
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 5.0
+w_ext: 2.0
+rate_ext: 100.0
+w_mnist: 0.25
+readout_from: E
+Accuracy: 9.80%
+==================================
+==================================
+I now have included STDP
+Number of neurons: 800
+Number of epochs: 500
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 4.0
+w_ext: 2.0
+rate_ext: 50.0
+w_mnist: 0.2
+readout_from: E
+Accuracy: 9.80%
+==================================
+==================================
+I now have included STDP
+Number of neurons: 10
+Number of epochs: 500
+Number of examples: 500
+Time: 250
+dt: 1.0
+Intensity: 64
+conn_prob: 0.1
+w_e: 1.0
+g: 4.0
+w_ext: 2.0
+rate_ext: 50.0
+w_mnist: 0.2
+readout_from: E
+Accuracy: 26.80%
+==================================
+==================================
+
+Got accuracy of 60% with these parameters:
+Other observations: Network seems to be in a very synchronous state. 
+Also used bins with 50ms
+
+
+seed = 0
+n_neurons=800
+n_epochs=200
+examples_train=500
+examples_test=500
+time=500
+dt=1.0
+intensity=64
+
+
+
+
+======== Quick Summary of the parameters ========
+----- Simulation Parameters -----
+Simulation time per sample [ms]: 500
+Time step [ms]: 1.0
+
+----- Network Structure -----
+Total number of neurons: 800
+Number of excitatory neurons: 640
+Number of inhibitory neurons: 160
+Number of noise neurons: 800
+
+----- Connectivity/Synapse Parameters -----
+Connection probability: 0.1
+Relative inhibitory strength (g): 5.0
+eta (external rate multiplier): 0.6
+C_noise (noise connections): 80
+(Excitatory ->) synapse weight: 2.0
+(Input ->) synapse weight: 40.0
+(Noise ->) synapse weight: 0.5
+Voltage amplitude jump (J): 0.1
+Excitatory voltage amplitude jump (J_E): 0.2
+Inhibitory voltage amplitude jump (J_I): -1.0
+Input voltage amplitude jump (J_input): 4.0
+Noise voltage amplitude jump (J_noise): 0.05
+Standard deviation of jump (J_std): 0.010000000000000002
+
+----- Neuron Parameters -----
+Membrane threshold potential (theta) [mV]: 20.0
+Membrane time constant (tau_m): 20.0
+Synaptic time constant (tau_s): 0.02
+
+----- Rates -----
+Threshold rate (v_th): 250.0
+External rate (v_ext): 150.0
+
+----- Seed -----
+Seed: 10061999
+
+
+
+============
+Finally got 80%!
+Changes Ive done:
+changed the way input is connected to the reservoir. Each excitatory neuron receives input from only one input neuron. 
+Some input neurons can be connected to multiple E neurons, but those E neurons cannot be connected to any other Input neurons
+We still divide the input into bins of 50 ms
+And also, have scaled up the input pixels by 5 times. This is equivelent of intensity of 320
+
+======== Quick Summary of the parameters ========
+----- Simulation Parameters -----
+Simulation time per sample [ms]: 250
+Time step [ms]: 1.0
+
+----- Network Structure -----
+Total number of neurons: 800
+Number of excitatory neurons: 640
+Number of inhibitory neurons: 160
+Number of noise neurons: 800
+
+----- Connectivity/Synapse Parameters -----
+Connection probability: 0.1
+Relative inhibitory strength (g): 5.0
+eta (external rate multiplier): 0.6
+C_noise (noise connections): 80
+(Excitatory ->) synapse weight: 2.0
+(Input ->) synapse weight: 40.0
+(Noise ->) synapse weight: 0.5
+Voltage amplitude jump (J): 0.1
+Excitatory voltage amplitude jump (J_E): 0.2
+Inhibitory voltage amplitude jump (J_I): -1.0
+Input voltage amplitude jump (J_input): 4.0
+Noise voltage amplitude jump (J_noise): 0.05
+Standard deviation of jump (J_std): 0.010000000000000002
+
+----- Neuron Parameters -----
+Membrane threshold potential (theta) [mV]: 20.0
+Membrane time constant (tau_m): 20.0
+Synaptic time constant (tau_s): 0.02
+
+----- Rates -----
+Threshold rate (v_th): 250.0
+External rate (v_ext): 150.0
+
+----- Seed -----
+Seed: 10061999
+
+
+==============================
+Fikk 82.8% accuracy med samme parameterene, men 
+intensity = 320
+N neurons = 1100
+n_epochs = 200 (men ser at loss faller til 0 etter rundt 30 epochs)

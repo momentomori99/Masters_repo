@@ -11,7 +11,7 @@ class Preprocessing:
         self.rate_scale = 5
         self.noise = 0.1
 
-    def import_iris_dataset(self):
+    def import_iris_dataset(self, plot = False):
         """
         Import the iris dataset and preprocess it.
 
@@ -23,6 +23,8 @@ class Preprocessing:
             r: normalized rates (numpy array)
             y: labels (numpy array)
         """
+        if plot:
+            print("No plot for iris dataset")
         iris = load_iris()
         X = iris.data
         y = iris.target

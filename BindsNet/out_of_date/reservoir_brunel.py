@@ -385,7 +385,7 @@ class Reservoir:
             pbar.set_description_str(f"Test progress: ({i+1} / {n_iters})")
 
             feat = self.run_one(x)
-            test_pairs.append((feat.detach().cpu(), y))
+            test_pairs.append((feat, y))
 
         return test_pairs
 

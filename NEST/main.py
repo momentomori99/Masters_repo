@@ -22,67 +22,36 @@ def freeze_stdp(brunel):
 def reset_state(brunel):
     nest.SetStatus(brunel.nodes_ex + brunel.nodes_in, {"V_m": 0.0})
 
-def train_stdp(brunel, y_train, simtime = 200.0, n_epochs = 3):
+def train_stdp(brunel, X, y_train, simtime = 200.0, n_epochs = 3):
     brunel.simtime = simtime
-    rng = np.random.RandomState(0)
+    #rng = np.random.RandomState(0)
 
     # Turning off the noise:
-    print("Turning the noise off for stdp training")
-    nest.SetStatus(brunel.noise, {"rate": brunel.p_rate * 0.79})
+   # print("Turning the noise off for stdp training")
+    #nest.SetStatus(brunel.noise, {"rate": brunel.p_rate * 0.79})
+    #brunel.get_stdp_weights(bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="study_weights", stimtime=simtime)
 
 
     for ep in range(n_epochs):
         print(f"Epoch {ep+1} of {n_epochs}")
-        #brunel.get_stdp_weights(bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="")
-        input_vector = []
-        non_input_vector = []
         for j in tqdm(range(len(X)), desc="Samples"):
             
             brunel.give_input(X[j].reshape(1, -1))
-
-            t0 = nest.GetKernelStatus("biological_time")
             brunel.simulate()
-            t1 = nest.GetKernelStatus("biological_time")
-            dt = (t1 - t0) / 1000.0
-
-            spike_vector = brunel.get_spike_vector_window(t0, t1)
-            inp = spike_vector[:brunel.feature_size].sum() / (brunel.feature_size * dt)
-            non = spike_vector[brunel.feature_size:].sum() / ((brunel.NE - brunel.feature_size) * dt)
-            input_vector.append(inp)
-            non_input_vector.append(non)
-
-
 
             
 
-        brunel.get_stdp_weights(bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="")
-        brunel.plot_raster()
+            
+
+
        
-        
-        dt = (t1 - t0) / 1000.0
-        print(f" FR input-group (Hz) mean: {np.mean(np.array(input_vector))}")
-        print(f"FR non-input (Hz) mean: {np.mean(np.array(non_input_vector))}")
-        print(f"FR input-group (Hz) std: {np.std(np.array(input_vector))}")
-        print(f"FR non-input (Hz) std: {np.std(np.array(non_input_vector))}")
-        #inp = spike_vector[:brunel.feature_size].sum() / (brunel.feature_size * dt)
-        #non = spike_vector[brunel.feature_size:].sum() / ((brunel.NE - brunel.feature_size) * dt)
-        print(f"Spike vector: {spike_vector}")
-        print("Noise rate actual:", nest.GetStatus(brunel.noise, "rate")[0])
-        print(f"X[j]: {X[j]}")
-        #print("FR input-group (Hz):", inp)
-        #print("FR non-input (Hz):", non)
-        print("NE:", brunel.NE)
-        print("feature_size:", brunel.feature_size)
-        print("vector len:", len(spike_vector))
-        print("input block sum:", spike_vector[:brunel.feature_size].sum())
-        print("non block sum:", spike_vector[brunel.feature_size:].sum())
-        print("dt ms:", t1 - t0)
+     
         
 
         
 
 
-    # #brunel.get_stdp_weights(bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="")
+    #brunel.get_stdp_weights(bins=100, show_top_bottom=False, plot=True, return_weights=False, folder_name="")
     summary = ""
     summary += f"Simulation time: {simtime} ms ---"
     summary += f"Number of epochs: {n_epochs} --- "
@@ -99,22 +68,28 @@ dataset_info, X, y = preprocessing.import_moon_dataset(plot=False)
 
 ##########################===================##########################
 
-brunel = Brunel(input=X[0].reshape(1, -1), stdp=True, reset=True, N_neurons=1000)
+brunel = Brunel(input=X[0].reshape(1, -1), stdp=False, reset=True, N_neurons=500)
 summary = brunel.print_summary()
 brunel.build_network()
 
-#summary_train_stdp = "NO TRAINING WITH STDP"
-summary_train_stdp = train_stdp(brunel, y, simtime=1000.0, n_epochs=1)
+t0 = nest.GetKernelStatus("biological_time")
+brunel.simulate()
+t1 = nest.GetKernelStatus("biological_time")
+brunel.plot_spike_distribution(t0=0, t1=t1)
+brunel.plot_raster()
 
-# Turning the noise back on
-#print("Turning the noise back on")
-#brunel.p_rate = (1000.0 * brunel.nu_ex * brunel.CE) / brunel.p_rate_scaler
-#nest.SetStatus(brunel.noise, {"rate": brunel.p_rate})
-#print(f"Noise rate: {brunel.p_rate:.2f} Hz")
+# #summary_train_stdp = "NO TRAINING WITH STDP"
+# summary_train_stdp = train_stdp(brunel, X, y, simtime=300.0, n_epochs=3)
+
+# # Turning the noise back on
+# print("Turning the noise back on")
+# #brunel.p_rate = (1000.0 * brunel.nu_ex * brunel.CE) / brunel.p_rate_scaler
+# #nest.SetStatus(brunel.noise, {"rate": brunel.p_rate})
+# print(f"Noise rate: {brunel.p_rate:.2f} Hz")
 
 
-#freeze_stdp(brunel)
-#brunel.simtime = 1000.0
+# freeze_stdp(brunel)
+# brunel.simtime = 1000.0
 
 
 # spike_matrix = []
@@ -126,7 +101,7 @@ summary_train_stdp = train_stdp(brunel, y, simtime=1000.0, n_epochs=1)
 #     brunel.simulate()
 #     t1 = nest.GetKernelStatus("biological_time")
 
-#     spike_vector = brunel.get_spike_vector_window(t0, t1)
+#     spike_vector, _ , _ = brunel.get_spike_vector_window(t0, t1)
 #     spike_matrix.append(spike_vector)
 
 #     firing_rate_ex_list = []
@@ -147,7 +122,7 @@ summary_train_stdp = train_stdp(brunel, y, simtime=1000.0, n_epochs=1)
 
 
 # spike_matrix = np.asarray(spike_matrix, dtype=float)
-# np.save("data/spike_matrix.npy", spike_matrix)
+# #np.save("data/spike_matrix.npy", spike_matrix)
 # #spike_matrix = np.load("data/spike_matrix.npy")
 
 # readout = Readout(spike_matrix, y)

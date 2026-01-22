@@ -26,7 +26,7 @@ class Brunel:
 
         self.simtime = 1000.0  # Simulation time (ms)
         self.delay = 1.5  # Synaptic delay (ms)
-        self.g = 3.0  # Relative inhibitory strength
+        self.g = 4.0  # Relative inhibitory strength
         self.eta = 1.1  # External rate in units of threshold
         self.epsilon = 0.01  # Connection probability
         self.N_neurons = N_neurons  # Total number of neurons
@@ -61,7 +61,7 @@ class Brunel:
 
         # Synapse parameters
         self.stdp = stdp
-        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.001, "alpha": 1.05,  "Wmax": 100.0}
+        self.stdp_params = {"weight": self.J_ex, "delay": self.delay, "lambda": 0.001, "alpha": 0.5,  "Wmax": 100.0}
         self.static_params = {"weight": self.J_ex, "delay": self.delay}
         self.inhibitory_params = {"weight": self.J_in, "delay": self.delay}
         self.bernoulli_conn = {"rule": "pairwise_bernoulli", "p": self.epsilon, "allow_autapses": False}
@@ -139,9 +139,20 @@ class Brunel:
         nest.Connect(self.noise,self.input_nodes + self.nodes_ex + self.nodes_in, conn_spec = "one_to_one", syn_spec="background") # Background noise to all neurons : static synapse
         nest.Connect(self.nodes_ex, self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # E -> I : Static synapse
         nest.Connect(self.nodes_ex, self.nodes_ex, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # E -> E : Static synapse
-        nest.Connect(self.input_nodes, self.nodes_ex, conn_spec=self.bernoulli_conn, syn_spec="excitatory_stdp") # Input -> E : STDP synapse
-        nest.Connect(self.input_nodes, self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # Input -> I : Static synapse
 
+        start_ex = 0
+        start_input = 0
+        stop_ex = len(self.nodes_ex) // self.n_features
+        stop_input = len(self.input_nodes) // self.n_features
+        for i in range(self.n_features):
+            nest.Connect(self.input_nodes[start_input:stop_input], self.nodes_ex[start_ex:stop_ex], conn_spec="all_to_all", syn_spec="excitatory_stdp") # Input -> E : STDP synapse
+            start_ex = stop_ex
+            stop_ex = start_ex + len(self.nodes_ex) // self.n_features
+            start_input = stop_input
+            stop_input = start_input + len(self.input_nodes) // self.n_features
+
+        
+        nest.Connect(self.input_nodes, self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="excitatory_static") # Input -> I : Static synapse
         nest.Connect(self.nodes_in, self.nodes_ex + self.nodes_in, conn_spec=self.bernoulli_conn, syn_spec="inhibitory") # I -> (E + I) : Static synapse
         
         # Connect all neurons to spike recorders 
@@ -401,8 +412,8 @@ class Brunel:
         plt.tight_layout()
         plt.grid(1)
         plt.savefig(f"data/spike_distribution/spike_distribution_{time.time()}.png")
-        #plt.show()
-        plt.close()
+        plt.show()
+        #plt.close()
 
 
 

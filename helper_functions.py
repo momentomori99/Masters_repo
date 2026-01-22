@@ -97,4 +97,4 @@ def create_png_animation(
 
 
 if __name__ == "__main__":
-    create_png_animation(directory_path="data/spike_distribution", output_filename="animation1.gif", fps=5)
+    create_png_animation(directory_path="BindsNet/results/spike_distribution", output_filename="animation1.gif", fps=5)

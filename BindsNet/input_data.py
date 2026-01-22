@@ -24,3 +24,4 @@ class Data:
         self.train_dataset = MNIST(self.encoder, root=os.path.join(self.root, "MNIST"), download=True, transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: x * self.intensity)]), train=True)
         self.test_dataset = MNIST(self.encoder, root=os.path.join(self.root, "MNIST"), download=True, transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: x * self.intensity)]), train=False)
         return self.train_dataset, self.test_dataset
+    

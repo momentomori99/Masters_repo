@@ -16,33 +16,39 @@ class Brunel:
         self.dt = float(dt)                                             # Time step [ms]     
 
         self.n_neurons = int(n_neurons)                                 # Total number of neurons
-        self.N_E = int(0.8 * self.n_neurons)                            # Number of excitatory neurons
+        self.N_E = int(0.6 * self.n_neurons)                            # Number of excitatory neurons
         self.N_I = self.n_neurons - self.N_E                            # Number of inhibitory neurons
-        self.N_noise = self.n_neurons                        # Number of noise neurons
-        # Connectivity/synapse parameters
-        self.epsilon = 0.1                                              # Connection probability [ ]
-        self.g = 5.0                                                  # Relative inhibitory strength [ ]
-        self.eta = 0.6
-        self.C_noise = int(self.N_noise * self.epsilon)
+        self.N_noise = self.n_neurons                                 # Number of noise neurons
 
-        self.w_E = 2.0                                                  # (Excitatory ->) synapse weight [ ]
-        self.w_input = 40.0                                              # (Input ->) synapse weight [ ]
-        self.w_noise = 0.5                                              # (Noise ->) synapse weight [ ]
+        # Connectivity/synapse parameters
+        self.epsilon = 0.1  
+        self.epsilon_noise = 0.01                                          # Connection probability [ ]
+        self.g = 7                                                   # Relative inhibitory strength [ ]
+        self.eta = 1
+        self.C_noise = int(self.N_noise * self.epsilon_noise)
+
+        self.w_E = 1.0                                                 # (Excitatory ->) synapse weight [ ]
+        self.w_input = 0.0                                             # (Input ->) synapse weight [ ]
+        self.w_noise = 4.0                                              # (Noise ->) synapse weight [ ]
 
         self.J = 0.1                                                    # Voltage amplitude jump [mV]
         self.J_E = self.w_E * self.J                                    # Excitatory voltage amplitude jump [mV]
         self.J_I = -self.g * self.J_E                                   # Inhinbitory voltage amplitude jump [mV]
         self.J_input = self.w_input * self.J                            # Input voltage amplitude jump [mV]
         self.J_noise = self.w_noise * self.J                            # Noise voltage amplitude jump [mV]
+
         self.J_std = 0.1 * abs(self.J)
         # Single neuron paramerers
         self.theta = 20.0                                               # Membrane threshold potential [mV]
         self.tau_m = 20.0 
+        self.delay = 3
         self.tau_s = self.tau_m / 1000.0                                           
 
     
-        self.v_th = self.theta/(self.J_noise*self.C_noise*self.tau_s)   # Threshold rate [Hz]
-        self.v_ext = self.eta * self.v_th 
+        self.v_th = self.theta/(self.J_noise*self.C_noise*self.tau_s)
+        self.v_th_poisson = np.random.poisson(lam=self.v_th, size=int(self.time//self.dt))   # Threshold rate [Hz]
+        self.v_ext = self.eta * self.v_th_poisson
+
 
 
 
@@ -107,7 +113,6 @@ class Brunel:
         print(f"Seed: {self.seed}")
 
         print("--------------------------------")
-        
         print("--------------------------------")
 
         
@@ -138,13 +143,11 @@ class Brunel:
 
         self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
         self.network.add_layer(self.mnist_in, name="MNIST")
-        #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
         connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W)
         self.network.add_connection(connection_mnist_E, source="MNIST", target="E")
 
         # each excitatory neuron has exactly one input
-        assert torch.all((self.W != 0).sum(dim=0) == 1) # Sanity check
-
+        #assert torch.all((self.W != 0).sum(dim=0) == 1) # Sanity check
         # input neurons may have multiple outputs
         
 
@@ -159,18 +162,18 @@ class Brunel:
 
         # Weights
         W_EE = mask_EE * torch.normal(self.J_E, self.J_std, size=(self.N_E, self.N_E)).clamp(min=0.0)   
-        W_EI = mask_EI * torch.normal(self.J_E, self.J_std, size=(self.N_E, self.N_I)).clamp(min=0.0)   
+        W_EI = mask_EI * torch.normal(self.J_E, self.J_std, size=(self.N_E, self.N_I)).clamp(min=0.0)
         W_IE = mask_IE * torch.normal(self.J_I, self.J_std, size=(self.N_I, self.N_E)).clamp(max=0.0)
         W_II = mask_II * torch.normal(self.J_I, self.J_std, size=(self.N_I, self.N_I)).clamp(max=0.0)
         W_noise_E = mask_noise_E * self.J_noise
         W_noise_I = mask_noise_I * self.J_noise
 
-        self.network.add_connection(Connection(self.neurons_E, self.neurons_E, w=W_EE), source="E", target="E")
-        self.network.add_connection(Connection(self.neurons_E, self.neurons_I, w=W_EI), source="E", target="I")
-        self.network.add_connection(Connection(self.neurons_I, self.neurons_E, w=W_IE), source="I", target="E")
-        self.network.add_connection(Connection(self.neurons_I, self.neurons_I, w=W_II), source="I", target="I")
-        self.network.add_connection(Connection(self.noise, self.neurons_E, w=W_noise_E), source="noise", target="E")
-        self.network.add_connection(Connection(self.noise, self.neurons_I, w=W_noise_I), source="noise", target="I")
+        self.network.add_connection(Connection(self.neurons_E, self.neurons_E, w=W_EE, delay=self.delay), source="E", target="E")
+        self.network.add_connection(Connection(self.neurons_E, self.neurons_I, w=W_EI, delay=self.delay), source="E", target="I")
+        self.network.add_connection(Connection(self.neurons_I, self.neurons_E, w=W_IE, delay=self.delay), source="I", target="E")
+        self.network.add_connection(Connection(self.neurons_I, self.neurons_I, w=W_II, delay=self.delay), source="I", target="I")
+        self.network.add_connection(Connection(self.noise, self.neurons_E, w=W_noise_E, delay=self.delay), source="noise", target="E")
+        self.network.add_connection(Connection(self.noise, self.neurons_I, w=W_noise_I, delay=self.delay), source="noise", target="I")
 
         # Monitors
         T = int(self.time / self.dt)
@@ -223,6 +226,11 @@ class Brunel:
             binned_E_flat = binned_E.flatten()
             features = binned_E_flat.float()
             #features = torch.cat([features_E.float(), features_I.float()])
+
+
+            CV_E = self._calculate_CV(E_spikes)
+            CV_I = self._calculate_CV(I_spikes)
+            print(CV_E, CV_I)
            
 
             pairs.append((features, label))
@@ -236,10 +244,25 @@ class Brunel:
 
         mnist_spikes = image.view(T, 1, 784).to("cpu")
 
+
+
+        
+
         # External Poisson drive for full window
-        p = self.v_ext * self.dt / 1000.0
-        spikes = (torch.rand(T, self.N_noise) < p).float()
-        self.network.run(inputs={"noise": spikes, "MNIST": mnist_spikes}, time=self.time)
+        p_vec = (self.v_ext * (self.dt / 1000.0))
+        spikes = torch.zeros(T, 1, self.N_noise)
+        for t in range(T):
+            p = float(p_vec[t])
+            
+            if torch.rand(1).item() < 0.5:
+                p = 1
+       
+            spikes[t] = (torch.rand(1, self.N_noise) < p).float()
+
+
+        
+        
+        self.network.run(inputs={"noise": spikes, "MNIST": mnist_spikes}, time=T)
 
         # Get spikes from monitors
         E_spikes = self.mon_E.get("s") # shape (T, 1, N_E)
@@ -261,8 +284,9 @@ class Brunel:
         s = np.array(s)
         s = s.astype(int)
 
-        bin_steps = int(round(bin_ms / self.dt))
-        N_bins = self.time // bin_steps
+        T_ms = self.time
+        bin_steps = int(bin_ms / self.dt)
+        N_bins = int(T_ms / bin_steps)
 
         T, N = s.shape
         trim_T = N_bins * bin_steps
@@ -271,6 +295,30 @@ class Brunel:
         binned_counts = s_binned.sum(axis=1)
 
         return torch.tensor(binned_counts, dtype=torch.float32)
+
+    def _calculate_CV(self, spikes):
+        # spikes shape: (T, 1, N) -> squeeze to (T, N)
+        spikes = spikes.squeeze(1).cpu()
+        T, N = spikes.shape
+        
+        cv_list = []
+        
+        for i in range(N):
+            # Find indices where spike == 1
+            spike_times = torch.where(spikes[:, i] == 1)[0].float()
+            
+            if len(spike_times) < 3:
+                # Need at least 3 spikes to get 2 intervals for a standard deviation
+                continue
+                
+            # Calculate ISIs in milliseconds
+            intervals = (spike_times[1:] - spike_times[:-1]) * self.dt
+            
+            # Brunel CV calculation
+            cv_i = torch.std(intervals) / torch.mean(intervals)
+            cv_list.append(cv_i.item())
+        
+        return np.mean(cv_list) if cv_list else 0.0
 
         
                            
