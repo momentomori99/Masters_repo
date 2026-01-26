@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import time
 
 from bindsnet.network import Network
 from bindsnet.network.nodes import Input, LIFNodes
@@ -12,7 +13,7 @@ from bindsnet.learning import PostPre
 from bindsnet.encoding import PoissonEncoder
 
 class Brunel:
-    def __init__(self, n_neurons, time, dt, mnist_input=True):
+    def __init__(self, n_neurons, time, dt, mnist_input=True, self_tuning=True, g=4, eta=1.0):
         self.time = int(time)                                           # Simulation time per sample [ms]
         self.dt = float(dt)                                             # Time step [ms]     
 
@@ -22,8 +23,9 @@ class Brunel:
 
         # Connectivity/synapse parameters
         self.epsilon = 0.1                                              # Connection probability [ ]
-        self.g = 6.0                                                  # Relative inhibitory strength [ ]
-        self.eta = 0.6
+        self.g = g                                                  # Relative inhibitory strength [ ]
+        self.eta = eta
+        self.self_tuning = self_tuning
 
         self.w_E = 1.0                                                  # (Excitatory ->) synapse weight [ ]
         self.w_ext = 10.0                                              # (Noise ->) synapse weight [ ]
@@ -56,7 +58,11 @@ class Brunel:
     
         #self.v_th = self.theta/(self.J_noise*self.C_noise*self.tau_s)   # Threshold rate [Hz]
         #self.v_ext = self.eta * self.v_th 
-        self.rate_ext = 250.0 # Hz per afferent
+
+        self.v_th = self.theta / (self.tau_s * self.w_ext) 
+        self.rate_ext = self.eta * self.v_th
+        print(f"v_th: {self.v_th}, rate_ext: {self.rate_ext}")
+        #self.rate_ext = 250.0 * self.eta # Hz per afferent
 
 
 
@@ -183,15 +189,19 @@ class Brunel:
 
         connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE)
         connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=W_EI)
-        connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
-        connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
+        self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
+        self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
+
+        self.W_IE_base = self.connection_IE.w.clone()
+        self.W_II_base = self.connection_II.w.clone()
+        self.g_base = self.g
 
         self.network.add_connection(connection_noise_E, source="noise_E", target="E")
         self.network.add_connection(connection_noise_I, source="noise_I", target="I")
         self.network.add_connection(connection_EE, source="E", target="E")
         self.network.add_connection(connection_EI, source="E", target="I")
-        self.network.add_connection(connection_IE, source="I", target="E")
-        self.network.add_connection(connection_II, source="I", target="I")
+        self.network.add_connection(self.connection_IE, source="I", target="E")
+        self.network.add_connection(self.connection_II, source="I", target="I")
 
 
         # Monitors
@@ -214,7 +224,7 @@ class Brunel:
             if label == target:
                 break
 
-        E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(image)
+        E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(image, self.rate_ext)
 
 
         self.plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
@@ -228,6 +238,8 @@ class Brunel:
 
     def stimulate_brunel(self, dataset, examples=500, shuffle=True):
 
+        CV_list, rho_mean_list, rate_list, g_list, eta_list = [], [], [], [], []
+
         # create index list of the samples to train on
         n_total = len(dataset)
         n_iters = min(examples, n_total)
@@ -240,23 +252,39 @@ class Brunel:
             image = sample["encoded_image"]
             label = sample["label"]
             pbar.set_description_str(f"Train progress: ({i+1} / {n_iters})")
-            features_E, features_I, E_spikes, I_spikes = self.run(image)
+            features_E, features_I, E_spikes, I_spikes = self.run(image, self.rate_ext)
             binned_E = self._spikes_to_binned_counts(E_spikes, bin_ms=50)
             binned_E_flat = binned_E.flatten()
             features = binned_E_flat.float()
             #features = torch.cat([features_E.float(), features_I.float()])
 
             CV_E = self._calculate_CV(E_spikes)
+            CV_list.append(CV_E)
             CV_I = self._calculate_CV(I_spikes)
-            print(f"CV_E: {CV_E}, CV_I: {CV_I}")
+            rho_mean_E = self._calculate_rho_mean(E_spikes, bin_ms=10.0)
+            rho_mean_list.append(rho_mean_E)
+            rho_mean_I = self._calculate_rho_mean(I_spikes, bin_ms=10.0)
+            neuron_rates_E = features_E / (self.time / 1000.0) #Hz to spikes/sec
+            rate_E = neuron_rates_E.mean()
+            rate_list.append(rate_E)
+            g_list.append(self.g)
+            eta_list.append(self.eta)
+            print(f"CV_E: {CV_E}, rho_mean_E: {rho_mean_E}")
+            print(f"g: {self.g}, eta: {self.eta}")
+            #self.plot_raster(E_spikes, I_spikes, f"Excitatory raster \n CV: {CV_E:.2f}, rho_mean: {rho_mean_E:.4f}, rate: {rate_E:.2f}", f"Inhibitory raster \n CV: {CV_I:.2f}, rho_mean: {rho_mean_I:.4f}")
            
 
             pairs.append((features, label))
+
+            # Logic for self tuning network towards AI regime.
+            if self.self_tuning:
+                self._self_tune(CV_E, rho_mean_E, rate_E)
+            
         
-        return pairs
+        return pairs, CV_list, rho_mean_list, rate_list, g_list, eta_list
             
     # Helper methods:
-    def run(self, image):
+    def run(self, image, noise_rate=150):
 
         mnist_spikes = image.view(self.time, 1, 784).to("cpu") # (T, 1, 784)
 
@@ -299,6 +327,22 @@ class Brunel:
 
         return E_spike_counts, I_spike_counts, E_spikes, I_spikes
 
+
+
+
+        self.network.reset_state_variables()
+        self.mon_E.reset_state_variables()
+        self.mon_I.reset_state_variables()
+
+    def set_g(self, new_g):
+        scale = float(new_g / self.g_base)
+
+        with torch.no_grad():
+            self.connection_IE.w.copy_(self.W_IE_base * scale)
+            self.connection_II.w.copy_(self.W_II_base * scale)
+        self.g = new_g
+
+    
     def _spikes_to_binned_counts(self, E_spikes, bin_ms = 50):
         s = E_spikes.squeeze(1) if E_spikes.dim() == 3 else E_spikes
         s = np.array(s)
@@ -339,9 +383,90 @@ class Brunel:
         
         return np.mean(cv_list) if cv_list else 0.0
 
-        
+    def _calculate_rho_mean(self, spikes: torch.Tensor, bin_ms: float = 5.0) -> float:
+        # spikes -> (T, N)
+        spikes = spikes.squeeze(1) if spikes.dim() == 3 else spikes
+        spikes = spikes.detach().float().cpu()
 
-        
+        T, N = spikes.shape
+        if N < 2 or T < 2:
+            return 0.0
+
+        # bin in time
+        bin_steps = max(1, int(round(bin_ms / self.dt)))
+        n_bins = T // bin_steps
+        if n_bins < 2:
+            return 0.0
+
+        x = spikes[: n_bins * bin_steps].reshape(n_bins, bin_steps, N).sum(dim=1)  # (n_bins, N)
+
+        # population activity
+        r_t = x.mean(dim=1)  # (n_bins,)
+
+        var_r = torch.var(r_t, unbiased=False)
+        var_i = torch.var(x, dim=0, unbiased=False)
+        mean_var_i = torch.mean(var_i)
+
+        if mean_var_i.item() <= 1e-12:
+            return 0.0
+
+        return float((var_r / mean_var_i).item())
+
+    def _self_tune(self, CV_value, rho_mean_value, rate):
+
+        CV_low, CV_high = 0.8, 1.2
+        rho_high = 0.015
+
+        rate_low = 2.0
+        rate_mid = 20.0
+        rate_high = 80.0
+
+        eta_min, eta_max = 0.5, 15.0
+        g_min, g_max = 1.0, 15.0
+
+        if rho_mean_value > rho_high:
+            
+            # update g with bounds
+            new_g = min(max(self.g + 0.1, g_min), g_max)
+            self.set_g(new_g)
+
+            if rate > rate_low:
+                # update eta with bounds
+                new_eta = min(max(self.eta - 0.02, eta_min), eta_max)
+                self.eta = new_eta
+                self.rate_ext = self.v_th * self.eta
+            return 
+
+        if CV_value < CV_low:
+            if rate > rate_high:
+                # too active + too regular
+                new_eta = min(max(self.eta - 0.02, eta_min), eta_max)
+                self.eta = new_eta
+                self.rate_ext = self.v_th * self.eta
+
+            elif rate < rate_low:
+                # too quiet
+                new_eta = min(max(self.eta + 0.02, eta_min), eta_max)
+                self.eta = new_eta
+                self.rate_ext = self.v_th * self.eta
+
+                new_g = min(max(self.g - 0.05, g_min), g_max)
+                self.set_g(new_g)
+
+            else:
+                new_eta = min(max(self.eta - 0.02, eta_min), eta_max)
+                self.eta = new_eta
+                self.rate_ext = self.v_th * self.eta
+            return
+
+        return
+
+
+
+
+
+
+
                            
     
     def plot_raster(self, E_spikes, I_spikes, title_excitatory, title_inhibitory):
@@ -362,7 +487,8 @@ class Brunel:
         ax[0].grid(True, linestyle="--", alpha=0.6)
         ax[1].grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
-        plt.show(block=True)
+        #plt.show(block=True)
+        plt.savefig(f"BindsNet/results/self_tuning/test1/raster_plot_{time.time()}.png")
         plt.close()
     
     def plot_rate_distribution(self, E_spike_counts, I_spike_counts, title_excitatory, title_inhibitory):
