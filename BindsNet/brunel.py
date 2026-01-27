@@ -3,6 +3,7 @@ import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import time
+import math
 
 from bindsnet.network import Network
 from bindsnet.network.nodes import Input, LIFNodes
@@ -22,19 +23,19 @@ class Brunel:
         self.N_I = self.n_neurons - self.N_E                            # Number of inhibitory neurons
 
         # Connectivity/synapse parameters
-        self.epsilon = 0.1                                              # Connection probability [ ]
+        self.epsilon = 0.01                                              # Connection probability [ ]
         self.g = g                                                  # Relative inhibitory strength [ ]
         self.eta = eta
         self.self_tuning = self_tuning
 
         self.w_E = 1.0                                                  # (Excitatory ->) synapse weight [ ]
-        self.w_ext = 10.0                                              # (Noise ->) synapse weight [ ]
+        self.w_ext = 1.0                                              # (Noise ->) synapse weight [ ]
         if mnist_input:
             self.w_input = 40.0
         else:
             self.w_input = 0.0
 
-        self.J = 0.1                                                    # Voltage amplitude jump [mV]
+        self.J = 0.001                                                    # Voltage amplitude jump [mV]
         #self.J_E = self.w_E * self.J                                    # Excitatory voltage amplitude jump [mV]
         #self.J_I = -self.g * self.J_E                                   # Inhinbitory voltage amplitude jump [mV]
         self.J_input = self.w_input * self.J                            # Input voltage amplitude jump [mV]
@@ -175,17 +176,33 @@ class Brunel:
 
 
         # Bernoulli masks for sparse connectivity
-        mask_EE = torch.bernoulli(torch.full((self.N_E, self.N_E), self.epsilon))
-        mask_EI = torch.bernoulli(torch.full((self.N_E, self.N_I), self.epsilon))
-        mask_IE = torch.bernoulli(torch.full((self.N_I, self.N_E), self.epsilon))
-        mask_II = torch.bernoulli(torch.full((self.N_I, self.N_I), self.epsilon))
+
+        #pos_E, rows_E, cols_E = self.make_grid_positions(self.N_E, device="cpu")
+        #pos_I, rows_I, cols_I = self.make_grid_positions(self.N_I, device="cpu")
+        pos_all, rows, cols = self.make_grid_positions(self.n_neurons)
+        pos_E = pos_all[:self.N_E]
+        pos_I = pos_all[self.N_E: self.N_E + self.N_I]
+
+
+        sigma_EE = 2.5
+        sigma_EI = 2.5
+        sigma_IE = 2.5
+        sigma_II = 2.5
+
+        #mask_EE, P_EE = self.distance_mask_2d(pos_E, pos_E, self.epsilon, sigma_EE, device="cpu")
+        #mask_EI, P_EI = self.distance_mask_2d(pos_E, pos_I, self.epsilon, sigma_EI, device="cpu")
+        #mask_IE, P_IE = self.distance_mask_2d(pos_I, pos_E, self.epsilon, sigma_IE, device="cpu")
+        #mask_II, P_II = self.distance_mask_2d(pos_I, pos_I, self.epsilon, sigma_II, device="cpu")
+        mask_EE, P_EE = self.distance_mask_2d_toroidal(pos_E, pos_E, self.epsilon, sigma_EE, rows, cols, device="cpu")
+        mask_EI, P_EI = self.distance_mask_2d_toroidal(pos_E, pos_I, self.epsilon, sigma_EI, rows, cols, device="cpu")
+        mask_IE, P_IE = self.distance_mask_2d_toroidal(pos_I, pos_E, self.epsilon, sigma_IE, rows, cols, device="cpu")
+        mask_II, P_II = self.distance_mask_2d_toroidal(pos_I, pos_I, self.epsilon, sigma_II, rows, cols, device="cpu")
 
         # Weights
         W_EE = mask_EE * torch.normal(self.mean_w_EE, self.std_w_EE, size=(self.N_E, self.N_E))
         W_EI = mask_EI * torch.normal(self.mean_w_EI, self.std_w_EI, size=(self.N_E, self.N_I))
         W_IE = mask_IE * torch.normal(self.mean_w_IE, self.std_w_IE, size=(self.N_I, self.N_E))
         W_II = mask_II * torch.normal(self.mean_w_II, self.std_w_II, size=(self.N_I, self.N_I))
-
 
         connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE)
         connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=W_EI)
@@ -212,6 +229,26 @@ class Brunel:
         self.network.add_monitor(self.mon_I, name="I_spikes")
 
         print("Network built successfully")
+
+
+
+
+        # positions (store for later viz)
+        self.pos_E, self.rows_E, self.cols_E = pos_E, rows, cols
+        self.pos_I, self.rows_I, self.cols_I = pos_I, rows, cols
+
+        # masks + probability matrices (store for later viz)
+        self.mask_EE, self.P_EE = mask_EE, P_EE
+        self.mask_EI, self.P_EI = mask_EI, P_EI
+        self.mask_IE, self.P_IE = mask_IE, P_IE
+        self.mask_II, self.P_II = mask_II, P_II
+
+        # store sigmas too if you want them in plot titles
+        self.sigma_EE = sigma_EE
+        self.sigma_EI = sigma_EI
+        self.sigma_IE = sigma_IE
+        self.sigma_II = sigma_II
+
         return self
 
     def run_one_sample(self, dataset, target):
@@ -226,10 +263,20 @@ class Brunel:
 
         E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(image, self.rate_ext)
 
+        CV_E = self._calculate_CV(E_spikes)
+        rho_mean_E = self._calculate_rho_mean(E_spikes, bin_ms=10.0)
+        neuron_rates_E = E_spike_counts / (self.time / 1000.0) #Hz to spikes/sec
+        rate_E = neuron_rates_E.mean()
+        print(f"CV_E: {CV_E}, rho_mean_E: {rho_mean_E}")
+        print(f"g: {self.g}, eta: {self.eta}")  
+
 
         self.plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
         self.plot_rate_distribution(E_spike_counts, I_spike_counts, "Histogram of Excitatory Neuron Firing Rates", "Histogram of Inhibitory Neuron Firing Rates")
         self.plot_spike_distribution(E_spike_counts, I_spike_counts, "Distribution of Excitatory and Inhibitory Neuron Spikes")
+        self.plot_spikecount_grid_E(E_spike_counts, title="E spike counts (2D grid)")
+        
+        
      
         
         
@@ -272,7 +319,8 @@ class Brunel:
             print(f"CV_E: {CV_E}, rho_mean_E: {rho_mean_E}")
             print(f"g: {self.g}, eta: {self.eta}")
             #self.plot_raster(E_spikes, I_spikes, f"Excitatory raster \n CV: {CV_E:.2f}, rho_mean: {rho_mean_E:.4f}, rate: {rate_E:.2f}", f"Inhibitory raster \n CV: {CV_I:.2f}, rho_mean: {rho_mean_I:.4f}")
-           
+            self.plot_spikecount_grid_E(features_E, title="E spike counts (2D grid)")
+            self.plot_spike_distribution(features_E, features_I, "Distribution of Excitatory and Inhibitory Neuron Spikes")
 
             pairs.append((features, label))
 
@@ -487,8 +535,8 @@ class Brunel:
         ax[0].grid(True, linestyle="--", alpha=0.6)
         ax[1].grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
-        #plt.show(block=True)
-        plt.savefig(f"BindsNet/results/self_tuning/test1/raster_plot_{time.time()}.png")
+        plt.show(block=True)
+        #plt.savefig(f"BindsNet/results/self_tuning/test1/raster_plot_{time.time()}.png")
         plt.close()
     
     def plot_rate_distribution(self, E_spike_counts, I_spike_counts, title_excitatory, title_inhibitory):
@@ -536,6 +584,218 @@ class Brunel:
         
         plt.show(block=True)
         plt.close()
+
+
+
+    # ==================== Introducing spatial dynamics ===============================
+
+    def make_grid_positions(self, N: int, rows: int | None = None, cols: int | None = None, device="cpu"):
+        if rows is None or cols is None:
+            cols = int(math.ceil(math.sqrt(N)))
+            rows = int(math.ceil(N / cols))
+
+        # (rows*cols, 2) coordinates, then keep first N
+        rr, cc = torch.meshgrid(
+            torch.arange(rows, device=device),
+            torch.arange(cols, device=device),
+            indexing="ij"
+        )
+        pos = torch.stack([rr.flatten(), cc.flatten()], dim=1).float()  # (rows*cols, 2)
+        pos = pos[:N]  # (N, 2)
+
+    
+        return pos, rows, cols
+
+    
+    def distance_mask_2d(self, pos_pre: torch.Tensor,
+                     pos_post: torch.Tensor,
+                     epsilon: float,
+                     sigma: float,
+                     device="cpu"):
+        """
+        pos_pre:  (N_pre, 2)
+        pos_post: (N_post, 2)
+        Returns a Bernoulli mask of shape (N_pre, N_post)
+        using Gaussian distance-based probabilities, scaled to ~epsilon mean.
+        """
+        # pairwise squared distances: (N_pre, N_post)
+        diff = pos_pre[:, None, :] - pos_post[None, :, :]
+        d2 = (diff ** 2).sum(dim=2)
+
+        # unscaled kernel
+        P = torch.exp(-d2 / (2.0 * sigma * sigma))  # (N_pre, N_post)
+
+        # if square, remove self connections
+        if pos_pre.shape[0] == pos_post.shape[0]:
+            P.fill_diagonal_(0.0)
+
+        # scale to match desired average epsilon (approx)
+        meanP = P.mean()
+        if meanP.item() > 1e-12:
+            P = P * (epsilon / meanP)
+        P = P.clamp(0.0, 1.0)
+
+        mask = torch.bernoulli(P).to(device)
+        return mask, P
+        
+    def distance_mask_2d_toroidal(self, pos_pre, pos_post, epsilon, sigma, rows, cols, device="cpu"):
+        # pos_* are (N, 2) with (row, col)
+
+        drow = torch.abs(pos_pre[:, None, 0] - pos_post[None, :, 0])
+        dcol = torch.abs(pos_pre[:, None, 1] - pos_post[None, :, 1])
+
+        # wrap-around distances
+        drow = torch.minimum(drow, rows - drow)
+        dcol = torch.minimum(dcol, cols - dcol)
+
+        d2 = drow**2 + dcol**2
+
+        P = torch.exp(-d2 / (2.0 * sigma * sigma))
+
+        if pos_pre.shape[0] == pos_post.shape[0]:
+            P.fill_diagonal_(0.0)
+
+        meanP = P.mean()
+        if meanP.item() > 1e-12:
+            P = P * (epsilon / meanP)
+
+        P = P.clamp(0.0, 1.0)
+        mask = torch.bernoulli(P).to(device)
+        return mask, P
+
+    def plot_positions(self,pos: torch.Tensor, title="Neuron positions"):
+        p = pos.detach().cpu().numpy()
+        plt.figure(figsize=(5,5))
+        plt.scatter(p[:,1], p[:,0], s=8)  # x=col, y=row
+        plt.gca().invert_yaxis()
+        plt.title(title)
+        plt.xlabel("x (col)")
+        plt.ylabel("y (row)")
+        plt.tight_layout()
+        plt.show(block=True)
+        plt.close()
+
+    def plot_EI_positions(self):
+        """
+        Plot excitatory and inhibitory neuron positions
+        on the same 2D toroidal grid.
+        """
+        pE = self.pos_E.detach().cpu().numpy()
+        pI = self.pos_I.detach().cpu().numpy()
+
+        plt.figure(figsize=(5, 5))
+
+        # Excitatory neurons
+        plt.scatter(
+            pE[:, 1], pE[:, 0],
+            s=8, c="tab:blue", label="Excitatory", alpha=0.8
+        )
+
+        # Inhibitory neurons
+        plt.scatter(
+            pI[:, 1], pI[:, 0],
+            s=12, c="tab:red", label="Inhibitory", alpha=0.9
+        )
+
+        plt.gca().invert_yaxis()
+        plt.xlabel("x (col)")
+        plt.ylabel("y (row)")
+        plt.title("E / I neuron positions on toroidal lattice")
+        plt.legend(markerscale=1.5)
+        plt.tight_layout()
+        plt.show(block=True)
+        plt.close()
+
+    def plot_probability_matrix(self, P: torch.Tensor, title="Connection probability P_ij", max_n=400):
+        M = P.detach().cpu()
+        n0 = min(max_n, M.shape[0])
+        n1 = min(max_n, M.shape[1])
+        plt.figure(figsize=(6,5))
+        plt.imshow(M[:n0, :n1].numpy(), aspect="auto")
+        plt.title(title + f" (cropped {n0}x{n1})")
+        plt.xlabel("post neuron index")
+        plt.ylabel("pre neuron index")
+        plt.colorbar(label="P_ij")
+        plt.tight_layout()
+        plt.show(block=True)
+        plt.close()
+
+    
+    def plot_outgoing_connections(self, mask: torch.Tensor, pos_post: torch.Tensor, pre_idx: int, title=None):
+        """
+        mask: (N_pre, N_post) 0/1
+        pos_post: (N_post, 2)
+        """
+        m = mask[pre_idx].detach().cpu()  # (N_post,)
+        p = pos_post.detach().cpu()
+        connected = (m > 0)
+
+        plt.figure(figsize=(5,5))
+        plt.scatter(p[:,1], p[:,0], s=8, alpha=0.2, label="all post")
+        plt.scatter(p[connected,1], p[connected,0], s=15, alpha=0.9, label="connected")
+        plt.gca().invert_yaxis()
+        plt.title(title or f"Outgoing connections from pre neuron {pre_idx}")
+        plt.xlabel("x (col)")
+        plt.ylabel("y (row)")
+        plt.legend()
+        plt.tight_layout()
+        plt.show(block=True)
+        plt.close()
+
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import torch
+
+    def plot_spikecount_grid(self,counts: torch.Tensor, pos: torch.Tensor, title="Spike count heatmap"):
+        counts = counts.detach().cpu().float()
+        pos = pos.detach().cpu().float()
+
+        # infer grid size from positions
+        rows = int(pos[:, 0].max().item()) + 1
+        cols = int(pos[:, 1].max().item()) + 1
+
+        grid = torch.zeros((rows, cols), dtype=torch.float32)
+        for i in range(pos.shape[0]):
+            r = int(pos[i, 0].item())
+            c = int(pos[i, 1].item())
+            grid[r, c] = counts[i]
+
+        plt.figure(figsize=(6, 5))
+        plt.imshow(grid.numpy(), aspect="equal")
+        plt.title(title)
+        plt.xlabel("x (col)")
+        plt.ylabel("y (row)")
+        plt.colorbar(label="spikes")
+        plt.tight_layout()
+        plt.show(block=True)
+        plt.close()
+
+
+
+    def plot_positions_E(self):
+        self.plot_positions(self.pos_E, title="E positions")
+
+    def plot_positions_I(self):
+        self.plot_positions(self.pos_I, title="I positions")
+
+    def plot_probability_EE(self, max_n=400):
+        self.plot_probability_matrix(self.P_EE, title=f"P_EE (sigma={self.sigma_EE})", max_n=max_n)
+
+    def plot_mask_EE(self, max_n=400):
+        self.plot_probability_matrix(self.mask_EE.float(), title="mask_EE", max_n=max_n)
+
+    def plot_outgoing_EE(self, pre_idx=0):
+        self.plot_outgoing_connections(self.mask_EE, self.pos_E, pre_idx=pre_idx,
+                                    title=f"EE outgoing (pre={pre_idx})")
+
+    def plot_spikecount_grid_E(self, E_counts, title="E spike counts"):
+        self.plot_spikecount_grid(E_counts, self.pos_E, title=title)
+
+
+
+
+
 
         
 
