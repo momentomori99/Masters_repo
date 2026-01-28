@@ -16,14 +16,17 @@ from bindsnet.encoding import PoissonEncoder
 class Brunel:
     def __init__(self, n_neurons, time, dt, mnist_input=True, self_tuning=True, g=4, eta=1.0):
         self.time = int(time)                                           # Simulation time per sample [ms]
-        self.dt = float(dt)                                             # Time step [ms]     
+        self.dt = float(dt)    
+        
+        self.frac_E = 0.8                                         # Time step [ms]     
 
         self.n_neurons = int(n_neurons)                                 # Total number of neurons
-        self.N_E = int(0.8 * self.n_neurons)                            # Number of excitatory neurons
+        self.N_E = int(self.frac_E * self.n_neurons)                            # Number of excitatory neurons
         self.N_I = self.n_neurons - self.N_E                            # Number of inhibitory neurons
 
         # Connectivity/synapse parameters
-        self.epsilon = 0.01                                              # Connection probability [ ]
+        self.epsilon = 0.076 
+        self.sigma = 5.5                                             # Connection probability [ ]
         self.g = g                                                  # Relative inhibitory strength [ ]
         self.eta = eta
         self.self_tuning = self_tuning
@@ -31,7 +34,7 @@ class Brunel:
         self.w_E = 1.0                                                  # (Excitatory ->) synapse weight [ ]
         self.w_ext = 1.0                                              # (Noise ->) synapse weight [ ]
         if mnist_input:
-            self.w_input = 40.0
+            self.w_input = 50.0
         else:
             self.w_input = 0.0
 
@@ -156,11 +159,13 @@ class Brunel:
 
 
         # Input (MNIST) to Excitatory Neurons
-        input_indices = torch.randint(0, 784, (self.N_E,)) # Which input neurons feeds excitatory neuron j
+        # Each excitatory neuron j gets input from input neuron j % 784 (deterministic, no randomness)
         self.W = torch.zeros(784, self.N_E)
         for j in range(self.N_E):
-            i = input_indices[j]
+            i = j % 784
+            print(f"i: {i}, j: {j}")
             self.W[i, j] = float(self.J_input)
+
 
         self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
         self.network.add_layer(self.mnist_in, name="MNIST")
@@ -179,15 +184,15 @@ class Brunel:
 
         #pos_E, rows_E, cols_E = self.make_grid_positions(self.N_E, device="cpu")
         #pos_I, rows_I, cols_I = self.make_grid_positions(self.N_I, device="cpu")
-        pos_all, rows, cols = self.make_grid_positions(self.n_neurons)
-        pos_E = pos_all[:self.N_E]
-        pos_I = pos_all[self.N_E: self.N_E + self.N_I]
+        pos_all, pos_E, pos_I, idx_E, idx_I, rows, cols = self.make_mixed_EI_lattice(self.n_neurons, frac_E=self.frac_E, device="cpu")
+        #pos_E = pos_all[:self.N_E]
+        #pos_I = pos_all[self.N_E: self.N_E + self.N_I]
 
 
-        sigma_EE = 2.5
-        sigma_EI = 2.5
-        sigma_IE = 2.5
-        sigma_II = 2.5
+        sigma_EE = self.sigma
+        sigma_EI = self.sigma
+        sigma_IE = self.sigma
+        sigma_II = self.sigma
 
         #mask_EE, P_EE = self.distance_mask_2d(pos_E, pos_E, self.epsilon, sigma_EE, device="cpu")
         #mask_EI, P_EI = self.distance_mask_2d(pos_E, pos_I, self.epsilon, sigma_EI, device="cpu")
@@ -234,8 +239,10 @@ class Brunel:
 
 
         # positions (store for later viz)
-        self.pos_E, self.rows_E, self.cols_E = pos_E, rows, cols
-        self.pos_I, self.rows_I, self.cols_I = pos_I, rows, cols
+        self.pos_all = pos_all
+        self.pos_E, self.pos_I = pos_E, pos_I
+        self.idx_E, self.idx_I = idx_E, idx_I
+        self.rows, self.cols = rows, cols
 
         # masks + probability matrices (store for later viz)
         self.mask_EE, self.P_EE = mask_EE, P_EE
@@ -319,8 +326,8 @@ class Brunel:
             print(f"CV_E: {CV_E}, rho_mean_E: {rho_mean_E}")
             print(f"g: {self.g}, eta: {self.eta}")
             #self.plot_raster(E_spikes, I_spikes, f"Excitatory raster \n CV: {CV_E:.2f}, rho_mean: {rho_mean_E:.4f}, rate: {rate_E:.2f}", f"Inhibitory raster \n CV: {CV_I:.2f}, rho_mean: {rho_mean_I:.4f}")
-            self.plot_spikecount_grid_E(features_E, title="E spike counts (2D grid)")
-            self.plot_spike_distribution(features_E, features_I, "Distribution of Excitatory and Inhibitory Neuron Spikes")
+            #self.plot_spikecount_grid_E(features_E, title="E spike counts (2D grid)")
+            #self.plot_spike_distribution(features_E, features_I, "Distribution of Excitatory and Inhibitory Neuron Spikes")
 
             pairs.append((features, label))
 
@@ -589,22 +596,29 @@ class Brunel:
 
     # ==================== Introducing spatial dynamics ===============================
 
-    def make_grid_positions(self, N: int, rows: int | None = None, cols: int | None = None, device="cpu"):
-        if rows is None or cols is None:
-            cols = int(math.ceil(math.sqrt(N)))
-            rows = int(math.ceil(N / cols))
+    def make_mixed_EI_lattice(self, N_total: int, frac_E: float = 0.8, device="cpu"):
+        cols = int(math.ceil(math.sqrt(N_total)))
+        rows = int(math.ceil(N_total / cols))
 
-        # (rows*cols, 2) coordinates, then keep first N
         rr, cc = torch.meshgrid(
             torch.arange(rows, device=device),
             torch.arange(cols, device=device),
             indexing="ij"
         )
-        pos = torch.stack([rr.flatten(), cc.flatten()], dim=1).float()  # (rows*cols, 2)
-        pos = pos[:N]  # (N, 2)
+        pos_all = torch.stack([rr.flatten(), cc.flatten()], dim=1).float()  # (rows*cols, 2)
+        pos_all = pos_all[:N_total]  # keep exactly N_total sites
 
-    
-        return pos, rows, cols
+        # random assignment of sites to E/I
+        perm = torch.randperm(N_total, device=device)
+        N_E = int(round(frac_E * N_total))
+        idx_E = perm[:N_E]
+        idx_I = perm[N_E:]
+
+        pos_E = pos_all[idx_E]
+        pos_I = pos_all[idx_I]
+
+        return pos_all, pos_E, pos_I, idx_E, idx_I, rows, cols
+
 
     
     def distance_mask_2d(self, pos_pre: torch.Tensor,
