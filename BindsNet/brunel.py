@@ -25,8 +25,8 @@ class Brunel:
         self.N_I = self.n_neurons - self.N_E                            # Number of inhibitory neurons
 
         # Connectivity/synapse parameters
-        self.epsilon = 0.076 
-        self.sigma = 5.5                                             # Connection probability [ ]
+        self.epsilon = 0.01 
+        self.sigma = 3.5                                             # Connection probability [ ]
         self.g = g                                                  # Relative inhibitory strength [ ]
         self.eta = eta
         self.self_tuning = self_tuning
@@ -34,7 +34,7 @@ class Brunel:
         self.w_E = 1.0                                                  # (Excitatory ->) synapse weight [ ]
         self.w_ext = 1.0                                              # (Noise ->) synapse weight [ ]
         if mnist_input:
-            self.w_input = 50.0
+            self.w_input = 90.0
         else:
             self.w_input = 0.0
 
@@ -78,7 +78,7 @@ class Brunel:
         self.mon_E = None
         self.mon_I = None
         
-        self.seed = 10061999                    # My birthday:)
+        self.seed = 10061990                    # My birthday:)
         np.random.seed(self.seed)
         torch.cuda.manual_seed_all(self.seed)
         torch.manual_seed(self.seed)
@@ -156,22 +156,11 @@ class Brunel:
         connection_noise_E = Connection(source=self.noise_E, target=self.neurons_E, w=self.w_ext * torch.eye(self.N_E))
         connection_noise_I = Connection(source=self.noise_I, target=self.neurons_I, w=self.w_ext * torch.eye(self.N_I))
 
+                
 
 
-        # Input (MNIST) to Excitatory Neurons
-        # Each excitatory neuron j gets input from input neuron j % 784 (deterministic, no randomness)
-        self.W = torch.zeros(784, self.N_E)
-        for j in range(self.N_E):
-            i = j % 784
-            print(f"i: {i}, j: {j}")
-            self.W[i, j] = float(self.J_input)
 
 
-        self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
-        self.network.add_layer(self.mnist_in, name="MNIST")
-        #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
-        connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W)
-        self.network.add_connection(connection_mnist_E, source="MNIST", target="E")
 
         # each excitatory neuron has exactly one input
         #assert torch.all((self.W != 0).sum(dim=0) == 1) # Sanity check
@@ -193,6 +182,33 @@ class Brunel:
         sigma_EI = self.sigma
         sigma_IE = self.sigma
         sigma_II = self.sigma
+
+
+        # Input (MNIST) to Excitatory Neurons
+        # Each excitatory neuron j gets input from input neuron j % 784 (deterministic, no randomness)
+        H_lat, W_lat = rows, cols
+        sigma_in = 2.0
+        self.W = torch.zeros(784, self.N_E)
+        for px in range(28):
+            for py in range(28):
+                p = py * 28 + px
+
+                tr = py / 28 * H_lat
+                tc = px / 28 * W_lat
+                target = torch.tensor([tr, tc])
+
+                diff = pos_E - target
+                d2 = (diff ** 2).sum(dim=1)
+                self.W[p,:] = torch.exp(-d2 / (2 * sigma_in**2))
+        self.W /= self.W.max()
+        self.W *= self.J_input
+
+        self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
+        self.network.add_layer(self.mnist_in, name="MNIST")
+        #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
+        connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W)
+        self.network.add_connection(connection_mnist_E, source="MNIST", target="E")
+
 
         #mask_EE, P_EE = self.distance_mask_2d(pos_E, pos_E, self.epsilon, sigma_EE, device="cpu")
         #mask_EI, P_EI = self.distance_mask_2d(pos_E, pos_I, self.epsilon, sigma_EI, device="cpu")
@@ -279,8 +295,8 @@ class Brunel:
 
 
         self.plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
-        self.plot_rate_distribution(E_spike_counts, I_spike_counts, "Histogram of Excitatory Neuron Firing Rates", "Histogram of Inhibitory Neuron Firing Rates")
-        self.plot_spike_distribution(E_spike_counts, I_spike_counts, "Distribution of Excitatory and Inhibitory Neuron Spikes")
+        #self.plot_rate_distribution(E_spike_counts, I_spike_counts, "Histogram of Excitatory Neuron Firing Rates", "Histogram of Inhibitory Neuron Firing Rates")
+        #self.plot_spike_distribution(E_spike_counts, I_spike_counts, "Distribution of Excitatory and Inhibitory Neuron Spikes")
         self.plot_spikecount_grid_E(E_spike_counts, title="E spike counts (2D grid)")
         
         
