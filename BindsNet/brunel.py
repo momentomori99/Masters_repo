@@ -805,8 +805,8 @@ class Brunel:
         plt.ylabel("y (row)")
         plt.colorbar(label="spikes")
         plt.tight_layout()
-        plt.savefig(f"BindsNet/results/testing/spikecount_grid_E_{time.time()}.png")
-        #plt.show(block=True)
+        #plt.savefig(f"BindsNet/results/testing/spikecount_grid_E_{time.time()}.png")
+        plt.show(block=True)
         plt.close()
 
 
