@@ -14,11 +14,12 @@ from bindsnet.learning import PostPre
 from bindsnet.encoding import PoissonEncoder
 
 class Brunel:
-    def __init__(self, n_neurons, time, dt, mnist_input=True, self_tuning=True, stdp = True, reset = True, g=4, eta=1.0, sigma = 3.5, epsilon = 0.01):
+    def __init__(self, n_neurons, time, dt, mnist_input=True, self_tuning=True, stdp = True, reset = True, g=4, eta=1.0, sigma = 3.5, epsilon = 0.01, intensity=430):
         self.time = int(time)                                           # Simulation time per sample [ms]
         self.dt = float(dt)    
         
-        self.frac_E = 0.7                                         # Time step [ms]     
+        self.frac_E = 0.7   
+        self.intensity = intensity                                      # Time step [ms]     
 
         self.n_neurons = int(n_neurons)                                 # Total number of neurons
         self.N_E = int(self.frac_E * self.n_neurons)                            # Number of excitatory neurons
@@ -167,6 +168,7 @@ class Brunel:
 
         # Input (MNIST) to Excitatory Neurons
         # Each excitatory neuron j gets input from input neuron j % 784 (deterministic, no randomness)
+        """
         H_lat, W_lat = rows, cols
         sigma_in = 2.0
         self.W = torch.zeros(784, self.N_E)
@@ -183,7 +185,7 @@ class Brunel:
                 self.W[p,:] = torch.exp(-d2 / (2 * sigma_in**2))
         self.W /= self.W.max()
         self.W *= self.J_input
-
+        
         self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
         self.network.add_layer(self.mnist_in, name="MNIST")
         #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
@@ -192,7 +194,19 @@ class Brunel:
         else:
             self.connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W.clone())
         self.network.add_connection(self.connection_mnist_E, source="MNIST", target="E")
+        """
 
+        self.K = 4 # number of feature maps
+        self.Hf = self.rows_f = 28
+        self.Wf = self.cols_f = 28 
+        self.D_in = self.K * self.Hf * self.Wf
+
+        self.feat_in = Input(n=self.D_in, traces=True, tc_trace=20.0)
+        self.network.add_layer(self.feat_in, name="F")
+
+        W_in = self.build_tiled_gaussian_W_in(pos_E, rows, cols, self.K, self.Hf, self.Wf, self.sigma, margin = 0.5)
+        self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=W_in)
+        self.network.add_connection(self.connection_F_E, source="F", target="E")
 
         #mask_EE, P_EE = self.distance_mask_2d(pos_E, pos_E, self.epsilon, sigma_EE, device="cpu")
         #mask_EI, P_EI = self.distance_mask_2d(pos_E, pos_I, self.epsilon, sigma_EI, device="cpu")
@@ -270,12 +284,14 @@ class Brunel:
 
         for i in range(len(dataset)):
             sample = dataset[i]
-            image = sample["encoded_image"]
+            #image = sample["encoded_image"]
             label = sample["label"]
+            feature_map = sample["feature_map"]
+            feat_spikes = self.encode_feature_map(feature_map, self.time, self.dt, self.intensity)
             if label == target:
                 break
 
-        E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(image, self.rate_ext)
+        E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(feat_spikes, self.rate_ext)
 
         CV_E = self._calculate_CV(E_spikes)
         rho_mean_E = self._calculate_rho_mean(E_spikes, bin_ms=10.0)
@@ -305,10 +321,12 @@ class Brunel:
         pairs = []
         for i, index in enumerate(pbar):
             sample = dataset[index]
-            image = sample["encoded_image"]
+            #image = sample["encoded_image"]
             label = sample["label"]
+            feature_map = sample["feature_map"]
+            feat_spikes = self.encode_feature_map(feature_map, self.time, self.dt, self.intensity)
             pbar.set_description_str(f"Train progress: ({i+1} / {n_iters})")
-            features_E, features_I, E_spikes, I_spikes = self.run(image, self.rate_ext)
+            features_E, features_I, E_spikes, I_spikes = self.run(feat_spikes, self.rate_ext)
             binned_E = self._spikes_to_binned_counts(E_spikes, bin_ms=50)
             binned_E_flat = binned_E.flatten()
             features = binned_E_flat.float()
@@ -364,7 +382,8 @@ class Brunel:
         
     def run(self, image, noise_rate=150):
 
-        mnist_spikes = image.view(self.time, 1, 784).to("cpu") # (T, 1, 784)
+        #mnist_spikes = image.view(self.time, 1, 784).to("cpu") # (T, 1, 784)
+        feat_spikes = image.to("cpu")
 
         encoder = PoissonEncoder(time=1)
         for t in range(self.time):
@@ -373,8 +392,10 @@ class Brunel:
             spikes_XE = encoder(rates_XE)
             spikes_XI = encoder(rates_XI)
 
-            mnist_t = mnist_spikes[t:t+1] # (1, 1, 784)
-            self.network.run(inputs={"noise_E": spikes_XE.unsqueeze(0), "noise_I": spikes_XI.unsqueeze(0), "MNIST": mnist_t}, time=1)
+            #mnist_t = mnist_spikes[t:t+1] # (1, 1, 784)
+            feat_t = feat_spikes[t:t+1] # (1, 1, D_in)
+            #self.network.run(inputs={"noise_E": spikes_XE.unsqueeze(0), "noise_I": spikes_XI.unsqueeze(0), "MNIST": mnist_t}, time=1)
+            self.network.run(inputs={"noise_E": spikes_XE.unsqueeze(0), "noise_I": spikes_XI.unsqueeze(0), "F": feat_t}, time=1)
 
         E_spikes = self.mon_E.get("s") # shape (T, 1, N_E)
         I_spikes = self.mon_I.get("s") # shape (T, 1, N_I)
@@ -392,6 +413,20 @@ class Brunel:
 
         return E_spike_counts, I_spike_counts, E_spikes, I_spikes
 
+
+    def encode_feature_map(self, feature_map, time, dt, intensity):
+        fm = feature_map.detach().float()
+
+        #normalize to [0, 1]
+        m = fm.max()
+        if m > 0:
+            fm = fm / m
+        rates = fm * intensity
+        rates = rates.flatten()  # (D, )
+
+        encoder = PoissonEncoder(time=time, dt=dt)
+        spikes = encoder(rates) # (T, D)
+        return spikes.unsqueeze(1) # (T, 1, D)
 
     def set_g(self, new_g):
         scale = float(new_g / self.g_base)
@@ -641,6 +676,50 @@ class Brunel:
         pos_I = pos_all[idx_I]
 
         return pos_all, pos_E, pos_I, idx_E, idx_I, rows, cols
+
+    def build_tiled_gaussian_W_in(self, pos_E, rows, cols, K, Hf, Wf, sigma_in, margin):
+        D_in = K * Hf * Wf
+        W_in = torch.zeros(D_in, self.N_E, dtype=torch.float32)
+
+        # tiling layout (rows x cols grid split into tile_rows x tile_cols)
+        tile_rows = int(math.floor(math.sqrt(K)))
+        tile_cols = int(math.ceil(K / tile_rows))
+
+        tile_h = rows / tile_rows
+        tile_w = cols / tile_cols
+
+        for k in range(K):
+            tr_idx = k // tile_cols
+            tc_idx = k % tile_cols
+
+            r0 = tr_idx * tile_h
+            r1 = (tr_idx + 1) * tile_h
+            c0 = tc_idx * tile_w
+            c1 = (tc_idx + 1) * tile_w
+
+            # keep targets away from borders
+            r0m, r1m = r0 + margin, r1 - margin
+            c0m, c1m = c0 + margin, c1 - margin
+
+            for u in range(Hf):
+                ur = u / (Hf - 1) if Hf > 1 else 0.5
+                for v in range(Wf):
+                    vr = v / (Wf - 1) if Wf > 1 else 0.5
+
+                    i = k * (Hf * Wf) + u * Wf + v
+
+                    tr = r0m + ur * (r1m - r0m)
+                    tc = c0m + vr * (c1m - c0m)
+
+                    target = torch.tensor([tr, tc], dtype=torch.float32)
+                    diff = pos_E - target
+                    d2 = (diff ** 2).sum(dim=1)
+                    W_in[i, :] = torch.exp(-d2 / (2 * sigma_in**2))
+
+        # normalize + scale
+        W_in /= (W_in.max() + 1e-12)
+        W_in *= self.J_input
+        return W_in
 
 
     
