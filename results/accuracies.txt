@@ -1,176 +1,53 @@
-These accuracies with these parameters:
-n_neurons=1000
-n_epochs=50
-examples_train=250
-examples_test=250
-time=500
-dt=1.0
-intensity=430
-
-Rank 1:
-CV: 0.356 +/- 0.0112
-rho_mean: 0.0797 +/- 0.0144
-rate: 28.8114 +/- 7.6708
-g: 4.0 +/- 0.0
-eta: 0.6 +/- 0.0
-acc: 82.8
---------------------------------
-Rank 2:
-CV: 0.3494785840789244 +/- 0.016972455803827245
-rho_mean: 0.17445920768380166 +/- 0.029352894211300395
-rate: 62.34225082397461 +/- 14.13438606262207
-g: 3.0 +/- 0.0
-eta: 0.8 +/- 0.0
-acc: 80.4
---------------------------------
-Rank 3:
-CV: 0.4750517713953218 +/- 0.01814115627722043
-rho_mean: 0.03589653743803501 +/- 0.00943484459790114
-rate: 17.997451782226562 +/- 4.7840776443481445
-g: 6.0 +/- 0.0
-eta: 1.3 +/- 0.0
-acc: 80.0
---------------------------------
-Rank 4:
-CV: 0.38723646595488526 +/- 0.017276259275879568
-rho_mean: 0.05318439468741417 +/- 0.010957883036635328
-rate: 21.079469680786133 +/- 5.766482830047607
-g: 5.0 +/- 0.0
-eta: 0.6 +/- 0.0
-acc: 80.0
---------------------------------
-Rank 5:
-CV: 0.3630714550457107 +/- 0.018049016091208177
-rho_mean: 0.16145683643221856 +/- 0.0238444823809998
-rate: 65.11431121826172 +/- 13.80732250213623
-g: 3.0 +/- 0.0
-eta: 1.3 +/- 0.0
-acc: 79.6
---------------------------------
-Rank 6:
-CV: 0.422293718168331 +/- 0.02525925135471275
-rho_mean: 0.041187705382704734 +/- 0.009735584523665462
-rate: 17.48952865600586 +/- 4.819242000579834
-g: 6.0 +/- 0.0
-eta: 0.8 +/- 0.0
-acc: 79.6
---------------------------------
-Rank 7:
-CV: 0.3494958445394166 +/- 0.017194161298117187
-rho_mean: 0.1740197012424469 +/- 0.03042287437136157
-rate: 62.28593063354492 +/- 14.197659492492676
-g: 3.0 +/- 0.0
-eta: 0.6 +/- 0.0
-acc: 79.6
---------------------------------
-Rank 8:
-CV: 0.3972787214821178 +/- 0.009098172288743106
-rho_mean: 0.07235522708296775 +/- 0.01327346863093207
-rate: 29.989871978759766 +/- 7.5936360359191895
-g: 4.0 +/- 0.0
-eta: 1.3 +/- 0.0
-acc: 79.2
---------------------------------
-Rank 9:
-CV: 0.35762797441058697 +/- 0.009880823405099146
-rho_mean: 0.08018405786156654 +/- 0.014568001198105666
-rate: 28.798219680786133 +/- 7.610572338104248
-g: 4.0 +/- 0.0
-eta: 0.8 +/- 0.0
-acc: 78.8
---------------------------------
-Rank 10:
-CV: 0.42963900998192 +/- 0.022457672636126788
-rho_mean: 0.04100355149805546 +/- 0.009315202801947671
-rate: 17.53466033935547 +/- 4.792675495147705
-g: 6.0 +/- 0.0
-eta: 1.0 +/- 0.0
-acc: 78.4
---------------------------------
-Rank 11:
-CV: 0.3939438742062639 +/- 0.015381243339741483
-rho_mean: 0.05268800500780344 +/- 0.01102784297942349
-rate: 21.142169952392578 +/- 5.722646713256836
-g: 5.0 +/- 0.0
-eta: 1.0 +/- 0.0
-acc: 78.4
---------------------------------
-Rank 12:
-CV: 0.3504201455798594 +/- 0.01612192680484193
-rho_mean: 0.17222832727432252 +/- 0.027852669297949426
-rate: 62.73884582519531 +/- 14.088808059692383
-g: 3.0 +/- 0.0
-eta: 1.0 +/- 0.0
-acc: 78.4
---------------------------------
-Rank 13:
-CV: 0.43892866960134025 +/- 0.012724722788374663
-rho_mean: 0.04769356566667557 +/- 0.010320357573563355
-rate: 21.77143096923828 +/- 5.72278356552124
-g: 5.0 +/- 0.0
-eta: 1.3 +/- 0.0
-acc: 77.6
---------------------------------
-Rank 14:
-CV: 0.3876699155749791 +/- 0.017610105448780732
-rho_mean: 0.05273199225962162 +/- 0.011544223759348686
-rate: 21.079641342163086 +/- 5.72995662689209
-g: 5.0 +/- 0.0
-eta: 0.8 +/- 0.0
-acc: 77.2
---------------------------------
-Rank 15:
-CV: 0.36204064527527935 +/- 0.008326583709629722
-rho_mean: 0.07920479986071587 +/- 0.015007708063977698
-rate: 28.904460906982422 +/- 7.612479209899902
-g: 4.0 +/- 0.0
-eta: 1.0 +/- 0.0
-acc: 76.0
---------------------------------
-Rank 16:
-CV: 0.42295290484361325 +/- 0.024994943973887376
-rho_mean: 0.04210889350622892 +/- 0.010410845655008756
-rate: 17.467039108276367 +/- 4.79654598236084
-g: 6.0 +/- 0.0
-eta: 0.6 +/- 0.0
-acc: 74.0
+# n_neurons=1000, time=500 ms, examples_train=250, examples_test=250
 
 
+g: 7.0, eta: 1.0 - CV: 0.462, rho: 0.0347, rate: 15.4 -- accuracy: 78.80
+g: 7.0, eta: 2.0 - CV: 0.720, rho: 0.0179, rate: 18.9 -- accuracy: 77.20
+g: 7.0, eta: 2.5 - CV: 0.833, rho: 0.0132, rate: 24.9 -- accuracy: 71.20
+g: 7.0, eta: 4.5 - CV: 0.941, rho: 0.0104, rate: 52.1 -- accuracy: 55.20
 
+g: 6.5, eta: 1.4 - CV: 0.520, rho: 0.0316, rate: 17.0 -- accuracy: 78.80
 
-different parameters:
-mean CV:  0.9410337045036015
-mean rho_mean:  0.010427766470238567
-mean rate:  52.1155
-mean g:  7.0
-mean eta:  4.5
-accuracy: 55.20
+g: 6.0, eta: 0.6 - CV: 0.423, rho: 0.0421, rate: 17.5 -- accuracy: 74.00
+g: 6.0, eta: 0.8 - CV: 0.422, rho: 0.0412, rate: 17.5 -- accuracy: 79.60
+g: 6.0, eta: 1.0 - CV: 0.430, rho: 0.0410, rate: 17.5 -- accuracy: 78.40
+g: 6.0, eta: 1.3 - CV: 0.475, rho: 0.0359, rate: 18.0 -- accuracy: 80.00
+g: 6.0, eta: 1.4 - CV: 0.503, rho: 0.0347, rate: 18.3 -- accuracy: 77.20
 
-mean CV:  0.8332779093854431
-mean rho_mean:  0.013229407019913196
-mean rate:  24.94192
-mean g:  7.0
-mean eta:  2.5
-accuracy: 71.20
+g: 5.0, eta: 0.6 - CV: 0.387, rho: 0.0532, rate: 21.1 -- accuracy: 80.00
+g: 5.0, eta: 0.8 - CV: 0.388, rho: 0.0527, rate: 21.1 -- accuracy: 77.20
+g: 5.0, eta: 1.0 - CV: 0.394, rho: 0.0527, rate: 21.1 -- accuracy: 78.40
+g: 5.0, eta: 1.3 - CV: 0.439, rho: 0.0477, rate: 21.8 -- accuracy: 77.60
 
-mean CV:  0.7203005153231535
-mean rho_mean:  0.017858303375542162
-mean rate:  18.8614
-mean g:  7.0
-mean eta:  2.0
-accuracy: 77.20
+g: 4.0, eta: 0.6 - CV: 0.356, rho: 0.0797, rate: 28.8 -- accuracy: 82.80
+g: 4.0, eta: 0.8 - CV: 0.358, rho: 0.0802, rate: 28.8 -- accuracy: 78.80
+g: 4.0, eta: 1.0 - CV: 0.362, rho: 0.0792, rate: 28.9 -- accuracy: 76.00
+g: 4.0, eta: 1.3 - CV: 0.397, rho: 0.0724, rate: 30.0 -- accuracy: 79.20
 
+g: 3.0, eta: 0.6 - CV: 0.349, rho: 0.1740, rate: 62.3 -- accuracy: 79.60
+g: 3.0, eta: 0.8 - CV: 0.349, rho: 0.1745, rate: 62.3 -- accuracy: 80.40
+g: 3.0, eta: 1.0 - CV: 0.350, rho: 0.1722, rate: 62.7 -- accuracy: 78.40
+g: 3.0, eta: 1.3 - CV: 0.363, rho: 0.1615, rate: 65.1 -- accuracy: 79.60
 
-mean CV:  0.51967011497791
-mean rho_mean:  0.031641059204936026
-mean rate:  17.00167
-mean g:  6.5
-mean eta:  1.4
-accuracy: 78.80
+After implementing sptial dynamics:
 
-mean CV:  0.502538585248987
-mean rho_mean:  0.0347417310886085
-mean rate:  18.269901
-mean g:  6.0
-mean eta:  1.4
-accuracy: 77.20
+g: 5.0, eta: 0.6 - CV: 0.169, rho: 0.021, rate: 30.0 - stdo: False, sigma: 0.5, epsilon: 0.5, N neurons: 1000, input intensity: 600 -- accuracy: 80.4%
+g: 5.0, eta: 0.6 - CV: 0.169, rho: 0.021, rate: 30.0 - stdo: False, sigma: 0.5, epsilon: 0.5, N neurons: 1000, input intensity: 1000 -- accuracy: 75.2%
+g: 5.0, eta: 0.6 - CV: 0.177, rho: 0.030, rate: 40.0 - stdo: False, sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000 -- accuracy: 76.0%
+
+STDP only input -> E
+STDP runs continuesly through the whole data accumulation, meaning no pre training with stdp
+initial weights for all Input -> E: 1.0
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.065, rate: 43.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5)), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 50, -- accuracy: 85.6%
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.065, rate: 43.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5)), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 100, -- accuracy: 83.2%
+
+Big boost in speed, since we do 50ms runs now. Instead of 250ms or 500ms per sample
+
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.065, rate: 43.0 - stdo: False, sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 50, -- accuracy: 82.8%
+
+Incorporated stdp training phase
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.066, rate: 31.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5), training samples: 1000), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 100, -- accuracy: 83.2%
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.066, rate: 31.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5), training samples: 500), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 100, -- accuracy: 83.2%
+
+Implementation of small decay and normalization in stdp training
+g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.066, rate: 31.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5), training samples: 500), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 100, -- accuracy: 82.4%

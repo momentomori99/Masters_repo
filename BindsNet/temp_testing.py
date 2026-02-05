@@ -15,7 +15,7 @@ n_neurons=2500
 n_epochs=20
 examples_train=1
 examples_test=500
-time = 250
+time = 50
 intensity = 300
 dt = 1
 
