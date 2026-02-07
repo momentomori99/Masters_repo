@@ -41,12 +41,8 @@ class Brunel:
             self.w_input = 0.0
 
         self.J = 0.1                                                    # Voltage amplitude jump [mV]
-        #self.J_E = self.w_E * self.J                                    # Excitatory voltage amplitude jump [mV]
-        #self.J_I = -self.g * self.J_E                                   # Inhinbitory voltage amplitude jump [mV]
         self.J_input = self.w_input * self.J                            # Input voltage amplitude jump [mV]
-        #self.J_noise = self.w_noise * self.J                            # Noise voltage amplitude jump [mV]
-        #self.J_std = 0.1 * abs(self.J)
-        # Single neuron paramerers
+
 
         self.mean_w_EE = self.w_E 
         self.mean_w_EI = self.w_E
@@ -57,28 +53,13 @@ class Brunel:
         self.std_w_IE = 0.1
         self.std_w_II = 0.1
 
-        self.theta = 20.0                                               # Membrane threshold potential [mV]
+        self.theta = 20.0                                              
         self.tau_m = 20.0 
         self.tau_s = self.tau_m / 1000.0                                           
 
-    
-        #self.v_th = self.theta/(self.J_noise*self.C_noise*self.tau_s)   # Threshold rate [Hz]
-        #self.v_ext = self.eta * self.v_th 
-
         self.v_th = self.theta / (self.tau_s * self.w_ext) 
         self.rate_ext = self.eta * self.v_th
-        print(f"v_th: {self.v_th}, rate_ext: {self.rate_ext}")
-        #self.rate_ext = 250.0 * self.eta # Hz per afferent
 
-
-
-        self.network = None
-        self.neurons_E = None
-        self.neurons_I = None
-        self.mnist_in = None
-
-        self.mon_E = None
-        self.mon_I = None
         
         self.seed = 10061990                    # My birthday:)
         np.random.seed(self.seed)
@@ -166,36 +147,6 @@ class Brunel:
         sigma_II = self.sigma
 
 
-        # Input (MNIST) to Excitatory Neurons
-        # Each excitatory neuron j gets input from input neuron j % 784 (deterministic, no randomness)
-        """
-        H_lat, W_lat = rows, cols
-        sigma_in = 2.0
-        self.W = torch.zeros(784, self.N_E)
-        for px in range(28):
-            for py in range(28):
-                p = py * 28 + px
-
-                tr = py / 28 * H_lat
-                tc = px / 28 * W_lat
-                target = torch.tensor([tr, tc])
-
-                diff = pos_E - target
-                d2 = (diff ** 2).sum(dim=1)
-                self.W[p,:] = torch.exp(-d2 / (2 * sigma_in**2))
-        self.W /= self.W.max()
-        self.W *= self.J_input
-        
-        self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
-        self.network.add_layer(self.mnist_in, name="MNIST")
-        #self.W = float(self.J_input) * torch.rand(784, self.N_E)/ np.sqrt(784)
-        if self.STDP:
-            self.connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W.clone(), update_rule=PostPre, nu=(1e-3, 1e-3), wmin = 0.0, wmax=5.0)
-        else:
-            self.connection_mnist_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W.clone())
-        self.network.add_connection(self.connection_mnist_E, source="MNIST", target="E")
-        """
-
         self.K = 4 # number of feature maps
         self.Hf = self.rows_f = 28
         self.Wf = self.cols_f = 28 
@@ -208,10 +159,6 @@ class Brunel:
         self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=W_in)
         self.network.add_connection(self.connection_F_E, source="F", target="E")
 
-        #mask_EE, P_EE = self.distance_mask_2d(pos_E, pos_E, self.epsilon, sigma_EE, device="cpu")
-        #mask_EI, P_EI = self.distance_mask_2d(pos_E, pos_I, self.epsilon, sigma_EI, device="cpu")
-        #mask_IE, P_IE = self.distance_mask_2d(pos_I, pos_E, self.epsilon, sigma_IE, device="cpu")
-        #mask_II, P_II = self.distance_mask_2d(pos_I, pos_I, self.epsilon, sigma_II, device="cpu")
         mask_EE, P_EE = self.distance_mask_2d_toroidal(pos_E, pos_E, self.epsilon, sigma_EE, rows, cols, device="cpu")
         mask_EI, P_EI = self.distance_mask_2d_toroidal(pos_E, pos_I, self.epsilon, sigma_EI, rows, cols, device="cpu")
         mask_IE, P_IE = self.distance_mask_2d_toroidal(pos_I, pos_E, self.epsilon, sigma_IE, rows, cols, device="cpu")
@@ -223,16 +170,12 @@ class Brunel:
         W_IE = mask_IE * torch.normal(self.mean_w_IE, self.std_w_IE, size=(self.N_I, self.N_E))
         W_II = mask_II * torch.normal(self.mean_w_II, self.std_w_II, size=(self.N_I, self.N_I))
 
-        if self.STDP:
-            connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE.clone())
-        else:
-            connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE.clone())
+      
+        connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=W_EE.clone())
         connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=W_EI)
 
-        if self.STDP:
-            self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
-        else:
-            self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
+ 
+        self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
         self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
 
         self.W_IE_base = self.connection_IE.w.clone()
