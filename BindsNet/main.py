@@ -2,6 +2,7 @@ from input_data import Data
 from input_data_CNN import Data as Data_CNN
 from brunel import Brunel
 from readout import Readout
+from readout_unsupervised import Readout as Readout_Unsupervised
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -11,16 +12,18 @@ from visualizer import *
 n_neurons=2500
 n_epochs=100
 examples_stdp_train = 1000
-examples_train=100
+examples_train=700
 examples_test=100
-time=100 # the temporal bins are 50ms, so this shoudl be minimum 50ms
+time=100 # the temporal bins are 50ms, so this should be minimum 50ms
 dt=1.0
 intensity=600
+seed = 42
 
 stdp = False
 mnist_input = True
 self_tuning = False
 reset = True
+heterogeneity = True
 
 g = 5
 eta = 0.6
@@ -34,7 +37,7 @@ train_dataset, test_dataset = data_CNN.load_MNIST()
 
 
 #=============================== Brunel ===============================
-brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt, mnist_input=True, self_tuning=False, eta=0.6, g=5.0, intensity=intensity)
+brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt, heterogeneity=heterogeneity, mnist_input=True, self_tuning=False, eta=0.6, g=5.0, intensity=intensity)
 brunel.build_brunel()
 
 
@@ -61,10 +64,17 @@ test_pairs, CV_test_list, rho_mean_test_list, rate_test_list, g_test_list, eta_t
 # print("mean eta: ", np.mean(eta_list))
 
 feature_dim = training_pairs[0][0].numel()
-readout = Readout(input_size=feature_dim, num_classes=10)
+readout = Readout(input_size=feature_dim, num_classes=10, seed=seed)
+
+
 readout.train_readout(training_pairs, n_epochs=n_epochs)
 acc = readout.test_readout(test_pairs)
 print(f"Accuracy: {acc:.2f}%")
+
+readout_unsupervised = Readout_Unsupervised(input_size=feature_dim, num_classes=10, seed=seed)
+readout_unsupervised.train_readout(training_pairs, n_epochs=n_epochs)
+acc_unsupervised = readout_unsupervised.test_readout(test_pairs)
+print(f"Accuracy (unsupervised): {acc_unsupervised:.2f}%")
 
 
 

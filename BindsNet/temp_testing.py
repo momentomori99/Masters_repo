@@ -15,7 +15,7 @@ n_neurons=2500
 n_epochs=20
 examples_train=1
 examples_test=500
-time = 50
+time = 250
 intensity = 300
 dt = 1
 
@@ -34,21 +34,22 @@ train_dataset, test_dataset = data.load_MNIST()
 
 
 
-#brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt, mnist_input=mnist_input, self_tuning=self_tuning, stdp = stdp, reset = reset, eta=eta, g=g, sigma=sigma, epsilon=epsilon, intensity=intensity)
-#brunel.build_brunel()
+brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt, mnist_input=mnist_input, self_tuning=self_tuning, stdp = stdp, reset = reset, eta=eta, g=g, sigma=sigma, epsilon=epsilon, intensity=intensity)
+brunel.build_brunel()
 
 #brunel.plot_EI_positions()
-#brunel.plot_outgoing_connections(brunel.mask_EE, brunel.pos_E, 500)
-#brunel.run_one_sample(train_dataset, 8)
+brunel.plot_outgoing_connections(brunel.mask_EE, brunel.pos_E, 450)
+brunel.run_one_sample(train_dataset, 8)
 #training_pairs, CV_list, rho_mean_list, rate_list, g_list, eta_list = brunel.stimulate_brunel(train_dataset, examples=examples_train)
 #test_pairs, CV_test_list, rho_mean_test_list, rate_test_list, g_test_list, eta_test_list = brunel.stimulate_brunel(test_dataset, examples=examples_test)
 
 # for i in range(100):
 #     sample = train_dataset[i]
-#     if sample["label"] == 1:
+#     if sample["label"] == 0:
 
 #         feature_map = sample["feature_map"]
-#         feat_spikes = data.encode_feature_map(feature_map, time, dt, intensity)
+#         feat_spikes = brunel.encode_feature_map(feature_map, time, dt, intensity)
+
 #         #data.plot_feature_map(feature_map, title=f"Feature map for label {sample['label']}")
 
 #         E_counts, I_counts, E_spikes, I_spikes = brunel.run(feat_spikes, brunel.rate_ext)

@@ -14,9 +14,10 @@ from bindsnet.learning import PostPre
 from bindsnet.encoding import PoissonEncoder
 
 class Brunel:
-    def __init__(self, n_neurons, time, dt, mnist_input=True, self_tuning=True, stdp = True, reset = True, g=4, eta=1.0, sigma = 3.5, epsilon = 0.01, intensity=430):
+    def __init__(self, n_neurons, time, dt, heterogeneity=False, mnist_input=True, self_tuning=True, stdp = True, reset = True, g=4, eta=1.0, sigma = 3.5, epsilon = 0.01, intensity=430):
         self.time = int(time)                                           # Simulation time per sample [ms]
-        self.dt = float(dt)    
+        self.dt = float(dt)  
+        self.heterogeneity = heterogeneity  
         
         self.frac_E = 0.7   
         self.intensity = intensity                                      # Time step [ms]     
@@ -125,8 +126,20 @@ class Brunel:
         self.network = Network(dt=self.dt)
 
         # Excitatory and Inhibitory Neurons
-        self.neurons_E = LIFNodes(n=self.N_E, tau=self.tau_m, rest=0.0, reset=0.0, thresh=self.theta, refrac=1, traces=True, tc_trace = 20.0)
-        self.neurons_I = LIFNodes(n=self.N_I, tau=self.tau_m, rest=0.0, reset=0.0, thresh=self.theta, refrac=1, traces=True, tc_trace = 20.0)
+        device = "cpu"
+        if self.heterogeneity:
+            tau_E = self._sample_param(self.N_E, base=self.tau_m, rel_std=0.25, min_val=5.0, max_val=60.0, device=device)
+            th_E  = self._sample_param(self.N_E, base=self.theta, rel_std=0.20, min_val=5.0, max_val=40.0, device=device)
+            tau_I = self._sample_param(self.N_I, base=self.tau_m, rel_std=0.25, min_val=5.0, max_val=60.0, device=device)
+            th_I  = self._sample_param(self.N_I, base=self.theta, rel_std=0.20, min_val=5.0, max_val=40.0, device=device)
+        else:
+            tau_E = self.tau_m
+            th_E = self.theta
+            tau_I = self.tau_m
+            th_I = self.theta
+
+        self.neurons_E = LIFNodes(n=self.N_E, tau=tau_E, rest=0.0, reset=0.0, thresh=th_E, refrac=1, traces=True, tc_trace = 20.0)
+        self.neurons_I = LIFNodes(n=self.N_I, tau=tau_I, rest=0.0, reset=0.0, thresh=th_I, refrac=1, traces=True, tc_trace = 20.0)
         self.network.add_layer(self.neurons_E, name="E")
         self.network.add_layer(self.neurons_I, name="I")
 
@@ -155,11 +168,14 @@ class Brunel:
         self.feat_in = Input(n=self.D_in, traces=True, tc_trace=20.0)
         self.network.add_layer(self.feat_in, name="F")
 
+        #W_in = self.build_interleaved_W_in(pos_E, rows, cols, self.K, self.Hf, self.Wf)
+        #W_in = self.build_columnar_W_in(pos_E, rows, cols, self.K, self.Hf, self.Wf, 0.6, margin = 0.01)
         W_in = self.build_tiled_gaussian_W_in(pos_E, rows, cols, self.K, self.Hf, self.Wf, self.sigma, margin = 0.5)
         self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=W_in)
         self.network.add_connection(self.connection_F_E, source="F", target="E")
 
         mask_EE, P_EE = self.distance_mask_2d_toroidal(pos_E, pos_E, self.epsilon, sigma_EE, rows, cols, device="cpu")
+        mask_EE, _ = self.apply_small_world_rewire(mask_EE, pos_E, rows, cols, p_rewire=0.075, d_min=3.0 * self.sigma, seed=self.seed, W=None)
         mask_EI, P_EI = self.distance_mask_2d_toroidal(pos_E, pos_I, self.epsilon, sigma_EI, rows, cols, device="cpu")
         mask_IE, P_IE = self.distance_mask_2d_toroidal(pos_I, pos_E, self.epsilon, sigma_IE, rows, cols, device="cpu")
         mask_II, P_II = self.distance_mask_2d_toroidal(pos_I, pos_I, self.epsilon, sigma_II, rows, cols, device="cpu")
@@ -222,6 +238,20 @@ class Brunel:
 
         return self
 
+
+    def _sample_param(self, N, base, rel_std=0.1, min_val=None, max_val=None, device="cpu"):
+        """
+        Sample per-neuron parameter values around `base`.
+        rel_std = 0.1 means std = 10% of base.
+        """
+        x = torch.normal(mean=float(base), std=float(base)*rel_std, size=(N,), device=device)
+        if min_val is not None or max_val is not None:
+            lo = -float("inf") if min_val is None else float(min_val)
+            hi =  float("inf") if max_val is None else float(max_val)
+            x = x.clamp(lo, hi)
+        return x
+
+
     def run_one_sample(self, dataset, target):
 
 
@@ -247,7 +277,7 @@ class Brunel:
         #self.plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
         #self.plot_rate_distribution(E_spike_counts, I_spike_counts, "Histogram of Excitatory Neuron Firing Rates", "Histogram of Inhibitory Neuron Firing Rates")
         #self.plot_spike_distribution(E_spike_counts, I_spike_counts, "Distribution of Excitatory and Inhibitory Neuron Spikes")
-        self.plot_spikecount_grid_E(E_spike_counts, title="E spike counts (2D grid)")
+        #self.plot_spikecount_grid_E(E_spike_counts, title="E spike counts (2D grid)")
         
     
 
@@ -270,7 +300,7 @@ class Brunel:
             feat_spikes = self.encode_feature_map(feature_map, self.time, self.dt, self.intensity)
             pbar.set_description_str(f"Train progress: ({i+1} / {n_iters})")
             features_E, features_I, E_spikes, I_spikes = self.run(feat_spikes, self.rate_ext)
-            binned_E = self._spikes_to_binned_counts(E_spikes, bin_ms=50)
+            binned_E = self._spikes_to_binned_counts(E_spikes, bin_ms=100)
             binned_E_flat = binned_E.flatten()
             features = binned_E_flat.float()
             #features = torch.cat([features_E.float(), features_I.float()])
@@ -620,6 +650,104 @@ class Brunel:
 
         return pos_all, pos_E, pos_I, idx_E, idx_I, rows, cols
 
+
+    def build_interleaved_W_in(self, pos_E, rows, cols, K, Hf, Wf,
+                           sigma_in=0.8, margin=1.0):
+        """
+        Interleaved retinotopy:
+        - each (u,v) maps to a 2x2 micro-block in E
+        - channel k chooses one offset inside that block
+        - strongest connection at that offset; weaker to neighbors via Gaussian
+        """
+        assert K == 4, "Must be 4 feature maps."
+
+        D_in = K * Hf * Wf
+        W_in = torch.zeros(D_in, self.N_E, dtype=torch.float32)
+
+        # Channel offsets (your exact desired assignment)
+        offsets = [(0.0, 0.0), (0.0, 1.0), (1.0, 0.0), (1.0, 1.0)]
+
+        # We map the Hf x Wf grid into the available E lattice.
+        # Because we need space for +1 offsets, we map into [margin, rows-1-margin] etc.
+        r0m, r1m = margin, rows - 1.0 - margin
+        c0m, c1m = margin, cols - 1.0 - margin
+
+        for u in range(Hf):
+            ur = u / (Hf - 1) if Hf > 1 else 0.5
+            base_r = r0m + ur * (r1m - r0m)
+
+            for v in range(Wf):
+                vr = v / (Wf - 1) if Wf > 1 else 0.5
+                base_c = c0m + vr * (c1m - c0m)
+
+                base_idx = u * Wf + v
+
+                for k in range(K):
+                    dr, dc = offsets[k]
+                    tr = base_r + dr
+                    tc = base_c + dc
+
+                    i = k * (Hf * Wf) + base_idx
+
+                    target = torch.tensor([tr, tc], dtype=torch.float32)
+                    diff = pos_E - target
+                    d2 = (diff ** 2).sum(dim=1)
+
+                    # Gaussian footprint: strongest at nearest neuron to (tr,tc)
+                    W_in[i, :] = torch.exp(-d2 / (2 * sigma_in**2))
+
+        # normalize + scale
+        W_in /= (W_in.max() + 1e-12)
+        W_in *= self.J_input
+        return W_in
+
+    def build_columnar_W_in(self, pos_E, rows, cols, K, Hf, Wf, sigma_in, margin,
+                        channel_gains=None):
+        """
+        Column-per-location:
+        - every pixel (u,v) maps to a cortical target (tr,tc)
+        - all K feature channels at that same (u,v) project to the same target
+        """
+        D_in = K * Hf * Wf
+        W_in = torch.zeros(D_in, self.N_E, dtype=torch.float32)
+
+        # Optional per-channel gain (e.g. equal gains if None)
+        if channel_gains is None:
+            channel_gains = torch.ones(K, dtype=torch.float32)
+        else:
+            channel_gains = torch.tensor(channel_gains, dtype=torch.float32)
+
+        # Keep targets away from borders
+        r0m, r1m = margin, rows - margin
+        c0m, c1m = margin, cols - margin
+
+        for u in range(Hf):
+            ur = u / (Hf - 1) if Hf > 1 else 0.5
+            tr = r0m + ur * (r1m - r0m)
+
+            for v in range(Wf):
+                vr = v / (Wf - 1) if Wf > 1 else 0.5
+                tc = c0m + vr * (c1m - c0m)
+
+                target = torch.tensor([tr, tc], dtype=torch.float32)
+                diff = pos_E - target
+                d2 = (diff ** 2).sum(dim=1)
+
+                # Spatial footprint of the "column" around (tr,tc)
+                base = torch.exp(-d2 / (2 * sigma_in**2))  # shape (N_E,)
+
+                # Apply same spatial footprint for all K channels at this (u,v)
+                base_idx = u * Wf + v
+                for k in range(K):
+                    i = k * (Hf * Wf) + base_idx
+                    W_in[i, :] = channel_gains[k] * base
+
+        # normalize + scale
+        W_in /= (W_in.max() + 1e-12)
+        W_in *= self.J_input
+        return W_in
+
+
     def build_tiled_gaussian_W_in(self, pos_E, rows, cols, K, Hf, Wf, sigma_in, margin):
         D_in = K * Hf * Wf
         W_in = torch.zeros(D_in, self.N_E, dtype=torch.float32)
@@ -663,6 +791,9 @@ class Brunel:
         W_in /= (W_in.max() + 1e-12)
         W_in *= self.J_input
         return W_in
+
+
+
 
 
     
@@ -721,6 +852,120 @@ class Brunel:
         P = P.clamp(0.0, 1.0)
         mask = torch.bernoulli(P).to(device)
         return mask, P
+
+
+
+    def _toroidal_dist(self, pos_a, pos_b, rows, cols):
+        """
+        pos_a, pos_b: (2,) arrays [r, c]
+        returns toroidal Euclidean distance
+        """
+        dr = abs(pos_a[0] - pos_b[0])
+        dc = abs(pos_a[1] - pos_b[1])
+        dr = min(dr, rows - dr)
+        dc = min(dc, cols - dc)
+        return (dr * dr + dc * dc) ** 0.5
+
+
+    def apply_small_world_rewire(self,mask, pos, rows, cols, p_rewire=0.02, d_min=10.0, seed=0, W=None):
+        """
+        mask: torch.Tensor or np.ndarray, shape (N, N), values 0/1
+        pos:  torch.Tensor or np.ndarray, shape (N, 2) with [row, col] for each neuron
+        rows, cols: grid size used for toroidal distances
+        p_rewire: probability to rewire each existing edge
+        d_min: only allow new targets farther than this distance (toroidal)
+        seed: RNG seed
+        W: optional weight matrix (same shape as mask). If provided, moved with rewired edges.
+
+        Returns:
+            new_mask (torch.Tensor),
+            new_W (torch.Tensor) if W is not None else None
+        """
+        rng = np.random.RandomState(seed)
+
+        # Convert to numpy for simpler indexing
+        if torch.is_tensor(mask):
+            mask_np = mask.cpu().numpy().astype(np.uint8)
+        else:
+            mask_np = mask.astype(np.uint8)
+
+        if torch.is_tensor(pos):
+            pos_np = pos.cpu().numpy()
+        else:
+            pos_np = np.asarray(pos)
+
+        if W is not None:
+            if torch.is_tensor(W):
+                W_np = W.cpu().numpy().copy()
+            else:
+                W_np = np.asarray(W).copy()
+        else:
+            W_np = None
+
+        N = mask_np.shape[0]
+
+        # Precompute candidate lists per neuron: "far enough" targets
+        far_candidates = []
+        for i in range(N):
+            candidates = []
+            pi = pos_np[i]
+            for j in range(N):
+                if j == i:
+                    continue
+                d = self._toroidal_dist(pi, pos_np[j], rows, cols)
+                if d >= d_min:
+                    candidates.append(j)
+            far_candidates.append(candidates)
+
+        # Rewire edges
+        for i in range(N):
+            posts = np.where(mask_np[i] == 1)[0]
+            if posts.size == 0:
+                continue
+
+            for j in posts:
+                if rng.rand() >= p_rewire:
+                    continue
+
+                # Remove old edge
+                mask_np[i, j] = 0
+
+                # Pick a new far target not already connected
+                candidates = far_candidates[i]
+                if len(candidates) == 0:
+                    # nothing to rewire to, restore old edge
+                    mask_np[i, j] = 1
+                    continue
+
+                # Try a few times to find a free target
+                new_j = None
+                for _ in range(50):
+                    cand = candidates[rng.randint(0, len(candidates))]
+                    if mask_np[i, cand] == 0:
+                        new_j = cand
+                        break
+
+                if new_j is None:
+                    # couldn't find a free far target, restore old edge
+                    mask_np[i, j] = 1
+                    continue
+
+                # Add new edge
+                mask_np[i, new_j] = 1
+
+                # Move the weight if provided
+                if W_np is not None:
+                    W_np[i, new_j] = W_np[i, j]
+                    W_np[i, j] = 0.0
+
+        new_mask = torch.tensor(mask_np, dtype=torch.uint8)
+
+        if W_np is not None:
+            new_W = torch.tensor(W_np, dtype=torch.float32)
+            return new_mask, new_W
+
+        return new_mask, None
+
 
     def plot_positions(self,pos: torch.Tensor, title="Neuron positions"):
         p = pos.detach().cpu().numpy()
@@ -827,8 +1072,8 @@ class Brunel:
         plt.ylabel("y (row)")
         plt.colorbar(label="spikes")
         plt.tight_layout()
-        #plt.savefig(f"BindsNet/results/testing/spikecount_grid_E_{time.time()}.png")
-        plt.show(block=True)
+        plt.savefig(f"BindsNet/results/testing/spikecount_grid_E_{time.time()}.png")
+        #plt.show(block=True)
         plt.close()
 
 

@@ -45,6 +45,11 @@ class Data:
         x = x_1x28x28.unsqueeze(0)  # (1,1,28,28)
         feat = F.conv2d(x, self.W_gabor, bias=None, stride=1, padding=self.W_gabor.shape[-1]//2)
         feat = torch.relu(feat)  # keep positive evidence
+
+
+        # feat shape: (1, K, H, W)
+        max_vals = feat.amax(dim=(2,3), keepdim=True)   # (1,K,1,1)
+        feat = feat * (feat >= 0.15 * max_vals)
         return feat.squeeze(0)   # (K,Hf,Wf)
 
     def load_MNIST(self):

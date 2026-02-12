@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+import random
+import numpy as np
 
 class NN(nn.Module):
     def __init__(self, input_size, num_classes):
@@ -13,13 +15,27 @@ class NN(nn.Module):
         return self.linear(x)  # logits: (1, num_classes)
 
 class Readout:
-    def __init__(self, input_size, num_classes):
-        self.model = NN(input_size, num_classes).to("cpu")
+    def __init__(self, input_size, num_classes, seed):
+        self.input_size = input_size
+        self.num_classes = num_classes  
+        self.seed = seed
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        torch.cuda.manual_seed_all(self.seed)
+        torch.manual_seed(self.seed)
+
+        self._init_model()
+
+    def _init_model(self):
+
+        torch.manual_seed(self.seed)
+        self.model = NN(self.input_size, self.num_classes).to("cpu")
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=20
         )
+
 
     def train_readout(self, training_pairs, n_epochs):
         self.model.train()
