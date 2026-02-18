@@ -91,4 +91,4 @@ def create_png_animation(
 
 
 if __name__ == "__main__":
-    create_png_animation(directory_path="BindsNet/results/testing", output_filename="animation1.gif", fps=3)
+    create_png_animation(directory_path="/Users/daquiry/Home/Masters_repo/IMP3_spatial/BindsNet/results/acitvity", output_filename="animation1.gif", fps=3)
