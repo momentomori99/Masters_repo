@@ -51,3 +51,246 @@ g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.066, rate: 31.0 - stdo: True (wmin: 0.0, wm
 
 Implementation of small decay and normalization in stdp training
 g: 5.0, eta: 0.6 - CV: 0.210, rho: 0.066, rate: 31.0 - stdo: True (wmin: 0.0, wmax:5.0, nu: (1e-5, 1e-5), training samples: 500), sigma: 1.0, epsilon: 0.3, N neurons: 2500, input intensity: 1000, time: 100, -- accuracy: 82.4%
+
+
+
+=======================================================
+Siste:
+Med all dop (Log-normal to false):
+
+Split 1/10 accuracy: 95.00%
+Split 2/10 accuracy: 95.00%
+Split 3/10 accuracy: 92.00%
+Split 4/10 accuracy: 90.00%
+Split 5/10 accuracy: 94.00%
+Split 6/10 accuracy: 94.00%
+Split 7/10 accuracy: 91.00%
+Split 8/10 accuracy: 94.00%
+Split 9/10 accuracy: 96.00%
+Split 10/10 accuracy: 93.00%
+Average accuracy over 10 splits: 93.40% +/- 1.80%
+
+======================================================================
+Heterogeneity to false:
+Split 1/10 accuracy: 94.00%
+Split 2/10 accuracy: 92.00%
+Split 3/10 accuracy: 92.00%
+Split 4/10 accuracy: 92.00%
+Split 5/10 accuracy: 95.00%
+Split 6/10 accuracy: 93.00%
+Split 7/10 accuracy: 94.00%
+Split 8/10 accuracy: 93.00%
+Split 9/10 accuracy: 95.00%
+Split 10/10 accuracy: 94.00%
+Average accuracy over 10 splits: 93.40% +/- 1.11%
+
+
+===========================================================================
+Baseline logistic regression directly on the MNIST dataset:
+Baseline split 1/100 accuracy: 85.00%
+Baseline split 2/100 accuracy: 83.00%
+Baseline split 3/100 accuracy: 82.00%
+Baseline split 4/100 accuracy: 84.00%
+Baseline split 5/100 accuracy: 82.00%
+Baseline split 6/100 accuracy: 83.00%
+Baseline split 7/100 accuracy: 82.00%
+Baseline split 8/100 accuracy: 86.00%
+Baseline split 9/100 accuracy: 82.00%
+Baseline split 10/100 accuracy: 82.00%
+Baseline split 11/100 accuracy: 83.00%
+Baseline split 12/100 accuracy: 83.00%
+Baseline split 13/100 accuracy: 76.00%
+Baseline split 14/100 accuracy: 77.00%
+Baseline split 15/100 accuracy: 82.00%
+Baseline split 16/100 accuracy: 85.00%
+Baseline split 17/100 accuracy: 78.00%
+Baseline split 18/100 accuracy: 77.00%
+Baseline split 19/100 accuracy: 84.00%
+Baseline split 20/100 accuracy: 84.00%
+Baseline split 21/100 accuracy: 85.00%
+Baseline split 22/100 accuracy: 78.00%
+Baseline split 23/100 accuracy: 85.00%
+Baseline split 24/100 accuracy: 85.00%
+Baseline split 25/100 accuracy: 78.00%
+Baseline split 26/100 accuracy: 82.00%
+Baseline split 27/100 accuracy: 77.00%
+Baseline split 28/100 accuracy: 80.00%
+Baseline split 29/100 accuracy: 83.00%
+Baseline split 30/100 accuracy: 83.00%
+Baseline split 31/100 accuracy: 85.00%
+Baseline split 32/100 accuracy: 86.00%
+Baseline split 33/100 accuracy: 85.00%
+Baseline split 34/100 accuracy: 84.00%
+Baseline split 35/100 accuracy: 77.00%
+Baseline split 36/100 accuracy: 82.00%
+Baseline split 37/100 accuracy: 82.00%
+Baseline split 38/100 accuracy: 84.00%
+Baseline split 39/100 accuracy: 86.00%
+Baseline split 40/100 accuracy: 79.00%
+Baseline split 41/100 accuracy: 79.00%
+Baseline split 42/100 accuracy: 84.00%
+Baseline split 43/100 accuracy: 86.00%
+Baseline split 44/100 accuracy: 79.00%
+Baseline split 45/100 accuracy: 78.00%
+Baseline split 46/100 accuracy: 84.00%
+Baseline split 47/100 accuracy: 81.00%
+Baseline split 48/100 accuracy: 84.00%
+Baseline split 49/100 accuracy: 89.00%
+Baseline split 50/100 accuracy: 82.00%
+Baseline split 51/100 accuracy: 83.00%
+Baseline split 52/100 accuracy: 77.00%
+Baseline split 53/100 accuracy: 81.00%
+Baseline split 54/100 accuracy: 79.00%
+Baseline split 55/100 accuracy: 82.00%
+Baseline split 56/100 accuracy: 78.00%
+Baseline split 57/100 accuracy: 81.00%
+Baseline split 58/100 accuracy: 85.00%
+Baseline split 59/100 accuracy: 80.00%
+Baseline split 60/100 accuracy: 72.00%
+Baseline split 61/100 accuracy: 82.00%
+Baseline split 62/100 accuracy: 83.00%
+Baseline split 63/100 accuracy: 83.00%
+Baseline split 64/100 accuracy: 83.00%
+Baseline split 65/100 accuracy: 81.00%
+Baseline split 66/100 accuracy: 76.00%
+Baseline split 67/100 accuracy: 81.00%
+Baseline split 68/100 accuracy: 86.00%
+Baseline split 69/100 accuracy: 84.00%
+Baseline split 70/100 accuracy: 81.00%
+Baseline split 71/100 accuracy: 74.00%
+Baseline split 72/100 accuracy: 76.00%
+Baseline split 73/100 accuracy: 84.00%
+Baseline split 74/100 accuracy: 80.00%
+Baseline split 75/100 accuracy: 81.00%
+Baseline split 76/100 accuracy: 81.00%
+Baseline split 77/100 accuracy: 83.00%
+Baseline split 78/100 accuracy: 68.00%
+Baseline split 79/100 accuracy: 85.00%
+Baseline split 80/100 accuracy: 78.00%
+Baseline split 81/100 accuracy: 77.00%
+Baseline split 82/100 accuracy: 86.00%
+Baseline split 83/100 accuracy: 83.00%
+Baseline split 84/100 accuracy: 80.00%
+Baseline split 85/100 accuracy: 88.00%
+Baseline split 86/100 accuracy: 74.00%
+Baseline split 87/100 accuracy: 82.00%
+Baseline split 88/100 accuracy: 85.00%
+Baseline split 89/100 accuracy: 83.00%
+Baseline split 90/100 accuracy: 76.00%
+Baseline split 91/100 accuracy: 80.00%
+Baseline split 92/100 accuracy: 87.00%
+Baseline split 93/100 accuracy: 90.00%
+Baseline split 94/100 accuracy: 82.00%
+Baseline split 95/100 accuracy: 81.00%
+Baseline split 96/100 accuracy: 82.00%
+Baseline split 97/100 accuracy: 88.00%
+Baseline split 98/100 accuracy: 88.00%
+Baseline split 99/100 accuracy: 82.00%
+Baseline split 100/100 accuracy: 84.00%
+Baseline average over 100 splits: 81.78% +/- 3.69%
+
+======================================================================
+No spatial, Heterogeneity True
+Network built successfully
+Split 1/10 accuracy: 75.00%
+Split 2/10 accuracy: 69.00%
+Split 3/10 accuracy: 62.00%
+Split 4/10 accuracy: 70.00%
+Split 5/10 accuracy: 71.00%
+Split 6/10 accuracy: 67.00%
+Split 7/10 accuracy: 70.00%
+Split 8/10 accuracy: 70.00%
+Split 9/10 accuracy: 67.00%
+Split 10/10 accuracy: 77.00%
+Average accuracy over 10 splits: 69.80% +/- 3.97%
+
+
+
+
+
+
+============================================================
+"""
+n_neurons = 2500
+n_epochs = 100
+examples_train = 500
+examples_test = 100
+n_splits = 10
+
+time = 100
+dt = 1.0
+
+intensity = 600
+seed = 42
+
+mnist_input = True
+heterogeneity = True
+self_tuning = False
+spatial = False
+convolution = False
+log_normal = True
+
+g = 5
+eta = 0.6
+sigma_input = 1
+sigma_network = 1
+epsilon = 0.3
+"""
+Building network...
+Network built successfully
+Split 1/10 accuracy: 66.00%
+Split 2/10 accuracy: 62.00%
+Split 3/10 accuracy: 66.00%
+Split 4/10 accuracy: 66.00%
+Split 5/10 accuracy: 61.00%
+Split 6/10 accuracy: 58.00%
+Split 7/10 accuracy: 56.00%
+Split 8/10 accuracy: 70.00%
+Split 9/10 accuracy: 62.00%
+Split 10/10 accuracy: 71.00%
+Average accuracy over 10 splits: 63.80% +/- 4.62%
+
+====================================================================================
+mnist_input = True
+heterogeneity = True
+self_tuning = False
+spatial = True
+convolution = False
+log_normal = False
+
+Building network...
+Network built successfully
+Split 1/10 accuracy: 84.00%
+Split 2/10 accuracy: 87.00%
+Split 3/10 accuracy: 86.00%
+Split 4/10 accuracy: 88.00%
+Split 5/10 accuracy: 85.00%
+Split 6/10 accuracy: 89.00%
+Split 7/10 accuracy: 89.00%
+Split 8/10 accuracy: 88.00%
+Split 9/10 accuracy: 86.00%
+Split 10/10 accuracy: 87.00%
+Average accuracy over 10 splits: 86.90% +/- 1.58%
+
+
+=============================================================================
+mnist_input = True
+heterogeneity = False
+self_tuning = False
+spatial = True
+convolution = False
+log_normal = False
+
+Building network...
+Network built successfully
+Split 1/10 accuracy: 85.00%
+Split 2/10 accuracy: 86.00%
+Split 3/10 accuracy: 90.00%
+Split 4/10 accuracy: 86.00%
+Split 5/10 accuracy: 90.00%
+Split 6/10 accuracy: 87.00%
+Split 7/10 accuracy: 87.00%
+Split 8/10 accuracy: 84.00%
+Split 9/10 accuracy: 82.00%
+Split 10/10 accuracy: 85.00%
+Average accuracy over 10 splits: 86.20% +/- 2.36%

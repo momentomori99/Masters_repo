@@ -193,6 +193,7 @@ class Brunel:
  
         self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=W_IE)
         self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=W_II)
+        
 
         self.W_IE_base = self.connection_IE.w.clone()
         self.W_II_base = self.connection_II.w.clone()
