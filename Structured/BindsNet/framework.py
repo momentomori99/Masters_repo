@@ -12,6 +12,7 @@ from bindsnet.network.nodes import Input, LIFNodes
 from bindsnet.network.topology import Connection
 from bindsnet.network.monitors import Monitor
 from bindsnet.encoding import PoissonEncoder
+from bindsnet.learning import PostPre
 
 from tools.spatial_tools import make_mixed_EI_lattice
 from tools.spatial_tools import distance_mask_2d_toroidal
@@ -36,7 +37,7 @@ from visualization.visualizations_spatial import plot_spikecount_grid
 
 
 class Framework:
-    def __init__(self, n_neurons, time, dt, seed, log_normal=False, heterogeneity=False, mnist_input=True, self_tuning=True, spatial=True, convolution=True, input_channels=4, g=4, eta=1.0, sigma_input = 1, sigma_network = 1, epsilon = 0.3, intensity=430):
+    def __init__(self, n_neurons, time, dt, seed, log_normal=False, heterogeneity=False, mnist_input=True, self_tuning=True, spatial=True, convolution=True, input_channels=4, g=4, eta=1.0, sigma_input = 1, sigma_network = 1, epsilon = 0.3, intensity=430, stdp=False, nu_stdp=(1e-5, 1e-3), norm_stdp=None):
         self.seed = seed
         np.random.seed(self.seed)
         torch.cuda.manual_seed_all(self.seed)
@@ -55,6 +56,9 @@ class Framework:
         self.log_normal = log_normal
         self.mnist_input = mnist_input
         self.convolution = convolution
+        self.stdp = stdp
+        self.nu_stdp = nu_stdp
+        self.norm_stdp = norm_stdp
 
         
         self.sigma_log = 0.8
@@ -143,7 +147,16 @@ class Framework:
             self.feat_in = Input(n=self.D_in, traces=True, tc_trace=20.0)
             self.network.add_layer(self.feat_in, name="F")
             self.W_in = build_tiled_gaussian_W_in(self.pos_E, self.N_E, self.rows, self.cols, self.K, self.Hf, self.Wf, self.sigma_input, margin = 0.5, w_input=self.w_input)
-            self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=self.W_in)
+            if self.stdp:
+                norm_val = self.norm_stdp if self.norm_stdp is not None else self.W_in.sum(dim=0).mean().item()
+                self.connection_F_E = Connection(
+                    source=self.feat_in, target=self.neurons_E, w=self.W_in,
+                    update_rule=PostPre, nu=self.nu_stdp,
+                    wmin=0.0, wmax=self.w_input * 2, norm=norm_val,
+                )
+                print(f"STDP norm (F→E): {norm_val:.2f}")
+            else:
+                self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=self.W_in)
             self.network.add_connection(self.connection_F_E, source="F", target="E")
 
             self.mask_EE = distance_mask_2d_toroidal(self.pos_E, self.pos_E, self.epsilon, self.sigma_network, self.rows, self.cols, device=self.device)
@@ -159,7 +172,16 @@ class Framework:
                 self.W_in[i, j] = float(self.w_input)
             self.mnist_in = Input(n=784, traces=True, tc_trace=20.0)
             self.network.add_layer(self.mnist_in, name="F")
-            self.connection_F_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W_in)
+            if self.stdp:
+                norm_val = self.norm_stdp if self.norm_stdp is not None else self.W_in.sum(dim=0).mean().item()
+                self.connection_F_E = Connection(
+                    source=self.mnist_in, target=self.neurons_E, w=self.W_in,
+                    update_rule=PostPre, nu=self.nu_stdp,
+                    wmin=0.0, wmax=self.w_input * 2, norm=norm_val,
+                )
+                print(f"STDP norm (F→E): {norm_val:.2f}")
+            else:
+                self.connection_F_E = Connection(source=self.mnist_in, target=self.neurons_E, w=self.W_in)
             self.network.add_connection(self.connection_F_E, source="F", target="E")
             self.mask_EE = torch.bernoulli(torch.full((self.N_E, self.N_E), self.epsilon))
             self.mask_EI = torch.bernoulli(torch.full((self.N_E, self.N_I), self.epsilon))
@@ -200,6 +222,7 @@ class Framework:
         self.network.add_monitor(self.mon_E, name="E_spikes")
         self.network.add_monitor(self.mon_I, name="I_spikes")
 
+        self.network.learning = False
         print("Network built successfully")
 
 
@@ -278,6 +301,92 @@ class Framework:
         return E_spike_counts, I_spike_counts, E_spikes, I_spikes
 
 
+
+    def enable_stdp(self):
+        self.network.learning = True
+
+    def disable_stdp(self):
+        self.network.learning = False
+
+    def run_stdp_training(self, dataset, n_samples, shuffle=True):
+        self.W_in_before = self.connection_F_E.w.detach().clone()
+        self.enable_stdp()
+
+        pbar = tqdm(range(n_samples), desc="STDP Training")
+        for i in pbar:
+            idx = random.choice(range(len(dataset))) if shuffle else i
+            sample = dataset[idx]
+            feature_map = sample["feature_map"]
+            feat_spikes = encode_feature_map(feature_map, self.time, self.dt, self.intensity)
+            self.run(feat_spikes)
+
+        self.disable_stdp()
+
+        self.W_in_after = self.connection_F_E.w.detach().clone()
+        delta = (self.W_in_after - self.W_in_before).abs().mean().item()
+        print(f"STDP training complete. Mean |ΔW|: {delta:.6f}")
+
+    def plot_input_weights(self, title="Input Weights", n_show=16):
+        w = self.connection_F_E.w.detach().clone().cpu().numpy()
+
+        indices = np.linspace(0, self.N_E - 1, n_show, dtype=int)
+        cols = int(np.ceil(np.sqrt(n_show)))
+        rows = int(np.ceil(n_show / cols))
+
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 2, rows * 2))
+        axes = axes.flatten()
+
+        for i, idx in enumerate(indices):
+            rf = w[:, idx]
+            if self.spatial:
+                rf = rf.reshape(self.K, self.Hf, self.Wf).sum(axis=0)
+            else:
+                rf = rf.reshape(28, 28)
+            axes[i].imshow(rf, cmap='hot', interpolation='nearest')
+            axes[i].set_title(f'N{idx}', fontsize=8)
+            axes[i].axis('off')
+
+        for i in range(len(indices), len(axes)):
+            axes[i].axis('off')
+
+        fig.suptitle(title, fontsize=14)
+        plt.tight_layout()
+        safe_title = title.replace(' ', '_').lower()
+        plt.savefig(f"results/{safe_title}.png", dpi=150, bbox_inches='tight')
+        plt.show()
+
+    def plot_weight_change(self, n_show=16):
+        if not hasattr(self, 'W_in_before') or not hasattr(self, 'W_in_after'):
+            print("No STDP training has been run yet.")
+            return
+
+        delta = (self.W_in_after - self.W_in_before).cpu().numpy()
+        indices = np.linspace(0, self.N_E - 1, n_show, dtype=int)
+        cols = int(np.ceil(np.sqrt(n_show)))
+        rows = int(np.ceil(n_show / cols))
+
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 2, rows * 2))
+        axes = axes.flatten()
+
+        vmax = np.abs(delta).max()
+        for i, idx in enumerate(indices):
+            rf = delta[:, idx]
+            if self.spatial:
+                rf = rf.reshape(self.K, self.Hf, self.Wf).sum(axis=0)
+            else:
+                rf = rf.reshape(28, 28)
+            axes[i].imshow(rf, cmap='RdBu_r', interpolation='nearest',
+                           vmin=-vmax, vmax=vmax)
+            axes[i].set_title(f'N{idx}', fontsize=8)
+            axes[i].axis('off')
+
+        for i in range(len(indices), len(axes)):
+            axes[i].axis('off')
+
+        fig.suptitle("STDP Weight Change (ΔW)", fontsize=14)
+        plt.tight_layout()
+        plt.savefig("results/stdp_weight_change.png", dpi=150, bbox_inches='tight')
+        plt.show()
 
     def get_configuration_info(self):
         print("======== Quick Summary of the parameters ========")

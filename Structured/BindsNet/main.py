@@ -8,7 +8,7 @@ from visualization.visualizations_readout import plot_tsne, plot_confusion_heatm
 
 
 # pramaters
-n_neurons = 500
+n_neurons = 2500
 n_epochs = 100
 examples_train = 500
 examples_test = 100
@@ -20,11 +20,13 @@ intensity = 600
 seed = 42
 
 mnist_input = True
-heterogeneity = False
+heterogeneity = True
 self_tuning = False
-spatial = False
+spatial = True
 convolution = False
 log_normal = False
+stdp = True
+stdp_samples = 100
 
 g = 5
 eta = 0.6
@@ -52,21 +54,27 @@ framework = Framework(
     sigma_network=sigma_network,
     epsilon=epsilon,
     intensity=intensity,
+    stdp=stdp,
 )
 framework.build_network()
-#framework.run_one_sample(train_dataset, 0)
 
-pairs_train = framework.run_stimulation(train_dataset, examples_train)
-pairs_test = framework.run_stimulation(test_dataset, examples_test)
+if stdp:
+    framework.plot_input_weights(title="Weights Before STDP")
+    framework.run_stdp_training(train_dataset, n_samples=stdp_samples)
+    framework.plot_input_weights(title="Weights After STDP")
+    framework.plot_weight_change()
 
-feature_dim = pairs_train[0][0].numel()
-readout = Readout(input_size=feature_dim, num_classes=10, seed=seed)
-readout.train_readout(pairs_train, n_epochs=n_epochs)
-acc = readout.test_readout(pairs_test)
-print(f"Accuracy: {acc:.2f}%")
+# pairs_train = framework.run_stimulation(train_dataset, examples_train)
+# pairs_test = framework.run_stimulation(test_dataset, examples_test)
 
-fisher_J = calculate_fisher_ratio(pairs_test)
-print(f"Fisher ratio: {fisher_J:.4f}")
+# feature_dim = pairs_train[0][0].numel()
+# readout = Readout(input_size=feature_dim, num_classes=10, seed=seed)
+# readout.train_readout(pairs_train, n_epochs=n_epochs)
+# acc = readout.test_readout(pairs_test)
+# print(f"Accuracy: {acc:.2f}%")
+
+# fisher_J = calculate_fisher_ratio(pairs_test)
+# print(f"Fisher ratio: {fisher_J:.4f}")
 
 # plot_tsne(pairs_train, perplexity=30)
 # plot_confusion_heatmap(pairs_train)
