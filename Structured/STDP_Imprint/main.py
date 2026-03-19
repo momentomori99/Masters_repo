@@ -8,7 +8,7 @@ from data.input_data_CNN import Data as Data_CNN
 from tools.metrics import calculate_fisher_ratio
 
 # ── Parameters ──
-neurons_per_class = 20
+neurons_per_class = 4
 num_classes = 10
 n_epochs = 100
 examples_train = 500
@@ -24,7 +24,8 @@ eta = 0.2
 epsilon = 0.1
 
 nu_stdp = (1e-4, 1e-2)
-n_samples_per_class = 10
+n_samples_per_class = 5
+norm_stdp = 3
 
 # ── Data ──
 data_CNN = Data_CNN(dt=dt, intensity=intensity, kernel_size=9,
@@ -43,6 +44,7 @@ framework = STDPImprintFramework(
     g=g,
     eta=eta,
     epsilon=epsilon,
+    norm_stdp=norm_stdp,
 )
 framework.build_network()
 
