@@ -25,6 +25,7 @@ from tools.feature_encoding import spikes_to_binned_counts
 #metrics
 from tools.metrics import calculate_CV
 from tools.metrics import calculate_rate
+from tools.metrics import calculate_rho_mean
 
 #visualization
 from visualization.visualizations import plot_raster
@@ -203,15 +204,19 @@ class Framework:
 
         connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=self.W_EE.clone())
         connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=self.W_EI)
-        connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=self.W_IE)
-        connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=self.W_II)
+        self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=self.W_IE)
+        self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=self.W_II)
         connection_noise_E = Connection(source=self.noise_E, target=self.neurons_E, w=self.w_ext * torch.eye(self.N_E))
         connection_noise_I = Connection(source=self.noise_I, target=self.neurons_I, w=self.w_ext * torch.eye(self.N_I))
 
         self.network.add_connection(connection_EE, source="E", target="E")
         self.network.add_connection(connection_EI, source="E", target="I")
-        self.network.add_connection(connection_IE, source="I", target="E")
-        self.network.add_connection(connection_II, source="I", target="I")
+        self.network.add_connection(self.connection_IE, source="I", target="E")
+        self.network.add_connection(self.connection_II, source="I", target="I")
+
+        self.W_IE_base = self.connection_IE.w.clone()
+        self.W_II_base = self.connection_II.w.clone()
+        self.g_base = self.g
         self.network.add_connection(connection_noise_E, source="noise_E", target="E")
         self.network.add_connection(connection_noise_I, source="noise_I", target="I")
 
@@ -243,12 +248,20 @@ class Framework:
 
         E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(feat_spikes)
 
-        #plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
+        plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
         #plot_rate_distribution(self.time, E_spike_counts, I_spike_counts, "Excitatory rate distribution", "Inhibitory rate distribution")
         #plot_spike_distribution(E_spike_counts, I_spike_counts, "Excitatory and inhibitory spike distribution")
         #plot_EI_positions(self.pos_E, self.pos_I)
         #plot_outgoing_connections(self.mask_EE, self.pos_E, 450, "Outgoing connections from excitatory neuron 450")
-        plot_spikecount_grid(E_spike_counts, self.pos_E, "Excitatory spike count heatmap")
+        #plot_spikecount_grid(E_spike_counts, self.pos_E, "Excitatory spike count heatmap")
+
+        CV = calculate_CV(E_spikes, self.dt)
+        print(f"CV: {CV:.2f}")
+        rho_mean = calculate_rho_mean(E_spikes, self.dt)
+        print(f"rho_mean: {rho_mean:.2f}")
+        rate = calculate_rate(E_spike_counts, self.time)
+        print(f"rate: {rate:.2f}")
+        
 
     
     def run_stimulation(self, dataset, examples, shuffle=True):
@@ -256,6 +269,7 @@ class Framework:
 
         pbar = tqdm(range(examples), desc=f"Stimulating network: (0 / {examples})")
         pairs = []
+        CV_list, rho_mean_list, rate_list, g_list, eta_list = [], [], [], [], []
 
         for i, index in enumerate(pbar):
             if shuffle:
@@ -270,10 +284,24 @@ class Framework:
             binned_E_flat = binned_E.flatten() # (N_bins * N_E,)
             features = binned_E_flat.float() # the features are the binned counts of the excitatory spikes in the network 
             pairs.append((features, label))
+
+            CV_E = calculate_CV(E_spikes, self.dt)
+            rho_mean_E = calculate_rho_mean(E_spikes, self.dt)
+            rate_E = calculate_rate(E_spike_counts, self.time)
+
+            CV_list.append(CV_E)
+            rho_mean_list.append(rho_mean_E)
+            rate_list.append(rate_E)
+            g_list.append(self.g)
+            eta_list.append(self.eta)
+
             pbar.set_description_str(f"Stimulating network: ({i+1} / {examples})")
+
+            if self.self_tuning:
+                self._self_tune(CV_E, rho_mean_E, rate_E)
             
 
-        return pairs
+        return pairs, CV_list, rho_mean_list, rate_list, g_list, eta_list
 
 
     def run(self, feat_spikes):
@@ -387,6 +415,49 @@ class Framework:
         plt.tight_layout()
         plt.savefig("results/stdp_weight_change.png", dpi=150, bbox_inches='tight')
         plt.show()
+
+
+    def set_g(self, new_g):
+        scale = float(new_g / self.g_base)
+        with torch.no_grad():
+            self.connection_IE.w.copy_(self.W_IE_base * scale)
+            self.connection_II.w.copy_(self.W_II_base * scale)
+        self.g = new_g
+
+    def set_eta(self, new_eta):
+        self.eta = new_eta
+        self.rate_ext = self.v_th * self.eta
+
+    def _self_tune(self, CV_value, rho_mean_value, rate):
+        CV_low, CV_high = 0.6, 1.2
+        rho_high = 0.05
+
+        rate_low = 2.0
+        rate_mid = 20.0
+        rate_high = 80.0
+
+        eta_min, eta_max = 0.5, 15.0
+        g_min, g_max = 1.0, 15.0
+
+        if rho_mean_value > rho_high:
+            self.set_g(min(max(self.g + 0.1, g_min), g_max))
+            if rate > rate_low:
+                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
+            return
+
+        if CV_value < CV_low:
+            if rate > rate_high:
+                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
+
+            elif rate < rate_low:
+                self.set_eta(min(max(self.eta + 0.02, eta_min), eta_max))
+                self.set_g(min(max(self.g - 0.05, g_min), g_max))
+
+            else:
+                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
+            return
+
+        return
 
     def get_configuration_info(self):
         print("======== Quick Summary of the parameters ========")

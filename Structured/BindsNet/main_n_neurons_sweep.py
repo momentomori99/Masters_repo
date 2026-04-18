@@ -58,8 +58,8 @@ def evaluate_with_neuron_count(n_neurons, train_dataset, test_dataset):
     )
     framework.build_network()
 
-    pairs_train = framework.run_stimulation(train_dataset, EXAMPLES_TRAIN)
-    pairs_test = framework.run_stimulation(test_dataset, EXAMPLES_TEST)
+    pairs_train, *_ = framework.run_stimulation(train_dataset, EXAMPLES_TRAIN)
+    pairs_test, *_ = framework.run_stimulation(test_dataset, EXAMPLES_TEST)
 
     feature_dim = pairs_train[0][0].numel()
     readout = Readout(input_size=feature_dim, num_classes=10, seed=SEED)

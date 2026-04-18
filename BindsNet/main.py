@@ -11,13 +11,13 @@ from visualizer import *
 
 
 seed = 0
-n_neurons=2500
+n_neurons=800
 n_epochs=100
-examples_train=300
-examples_test=100
-time=100
+examples_train=500
+examples_test=500
+time=250
 dt=1.0
-intensity=600
+intensity=64
 
 
 
@@ -28,11 +28,17 @@ torch.manual_seed(seed)
 data = Data(time=time, dt=dt, shuffle=True, intensity=intensity)
 train_dataset, test_dataset = data.load_MNIST()
 
-brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt)
-brunel.build_brunel()
 
-training_pairs = brunel.stimulate_brunel(train_dataset, examples=examples_train, shuffle=True)
-test_pairs = brunel.stimulate_brunel(test_dataset, examples=examples_test, shuffle=False)
+reservoir = Reservoir(n_neurons=n_neurons, time=time, dt=dt)
+reservoir.build_reservoir()
+
+training_pairs = reservoir.train_reservoir(train_dataset, examples=examples_train, shuffle=True)
+test_pairs = reservoir.test_reservoir(test_dataset, examples=examples_test, shuffle=False)
+#brunel = Brunel(n_neurons=n_neurons, time=time, dt=dt)
+#brunel.build_brunel()
+
+#training_pairs = brunel.stimulate_brunel(train_dataset, examples=examples_train, shuffle=True)
+#test_pairs = brunel.stimulate_brunel(test_dataset, examples=examples_test, shuffle=False)
 
 
 feature_dim = training_pairs[0][0].numel()
@@ -42,9 +48,9 @@ readout.train_readout(training_pairs, n_epochs=n_epochs)
 acc = readout.test_readout(test_pairs)
 print(f"Accuracy: {acc:.2f}%")
 
-visualizer = Visualizer(training_pairs)
-visualizer.plot_tsne(perplexity=30)
-visualizer.plot_confusion_proximity() 
+# visualizer = Visualizer(training_pairs)
+# visualizer.plot_tsne(perplexity=30)
+# visualizer.plot_confusion_proximity() 
 
 
 

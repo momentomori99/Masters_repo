@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import seaborn as sns
 from sklearn.manifold import TSNE
 from sklearn.metrics import confusion_matrix
@@ -140,3 +141,210 @@ def plot_confusion_heatmap(
     plt.close()
 
     return cm
+
+
+def plot_rsa_heatmap(
+    pairs,
+    class_names=None,
+    cmap="RdBu_r",
+    figsize=(8, 6),
+    title="Representational Similarity (Pearson)",
+    vmin=-1.0,
+    vmax=1.0,
+):
+    """
+    Representational Similarity Analysis: Pearson correlation between class
+    centroids in feature space.
+
+    Returns the (C, C) correlation matrix.
+    """
+    X, y = _pairs_to_xy(pairs)
+    X_np = _to_numpy(X)
+    y_np = _to_numpy(y).astype(int)
+
+    classes = np.unique(y_np)
+    centroids = np.stack(
+        [X_np[y_np == cls].mean(axis=0) for cls in classes], axis=0
+    )  # (C, D)
+
+    grand_mean = centroids.mean(axis=0, keepdims=True)
+    centroids = centroids - grand_mean
+
+    corr = np.corrcoef(centroids)  # (C, C)
+
+    if class_names is None:
+        tick_labels = [str(c) for c in classes]
+    else:
+        if len(class_names) != len(classes):
+            raise ValueError("`class_names` length must match the number of classes.")
+        tick_labels = class_names
+
+    plt.figure(figsize=figsize)
+    sns.heatmap(
+        corr,
+        annot=True,
+        fmt=".2f",
+        cmap=cmap,
+        xticklabels=tick_labels,
+        yticklabels=tick_labels,
+        vmin=vmin,
+        vmax=vmax,
+        center=0.0,
+        cbar_kws={"label": "Pearson r"},
+        square=True,
+    )
+    plt.xlabel("Class")
+    plt.ylabel("Class")
+    plt.title(title)
+    plt.tight_layout()
+    plt.show(block=True)
+    plt.close()
+
+    return corr
+
+
+def plot_tsne_rsa(
+    pairs,
+    class_names=None,
+    perplexity=30,
+    max_iter=1000,
+    random_state=42,
+    rsa_cmap="RdBu_r",
+    figsize=(14, 5.5),
+    suptitle="Reservoir Feature Analysis",
+):
+    """
+    Side-by-side t-SNE embedding (left) and RSA heatmap (right).
+
+    Returns (X_emb, corr).
+    """
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 11,
+        "axes.titlesize": 13,
+        "axes.labelsize": 12,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 9,
+        "figure.dpi": 150,
+    })
+
+    X, y = _pairs_to_xy(pairs)
+    X_np = _to_numpy(X)
+    y_np = _to_numpy(y).astype(int)
+    classes = np.unique(y_np)
+
+    if class_names is None:
+        tick_labels = [str(c) for c in classes]
+    else:
+        if len(class_names) != len(classes):
+            raise ValueError("`class_names` length must match the number of classes.")
+        tick_labels = class_names
+
+    # ── t-SNE ──
+    effective_perplexity = min(perplexity, max(1, X_np.shape[0] - 1))
+    tsne = TSNE(
+        n_components=2,
+        perplexity=effective_perplexity,
+        max_iter=max_iter,
+        random_state=random_state,
+    )
+    X_emb = tsne.fit_transform(X_np)
+
+    # ── RSA ──
+    centroids = np.stack(
+        [X_np[y_np == cls].mean(axis=0) for cls in classes], axis=0
+    )
+    grand_mean = centroids.mean(axis=0, keepdims=True)
+    centroids = centroids - grand_mean
+    corr = np.corrcoef(centroids)
+
+    # ── Figure ──
+    fig = plt.figure(figsize=figsize)
+    gs = gridspec.GridSpec(1, 2, width_ratios=[1.15, 1], wspace=0.35)
+
+    cmap_scatter = plt.cm.Set2 if len(classes) <= 8 else plt.cm.tab20
+    colors = cmap_scatter(np.linspace(0, 0.9, len(classes)))
+
+    # Left: t-SNE
+    ax0 = fig.add_subplot(gs[0])
+    for idx, cls in enumerate(classes):
+        mask = y_np == cls
+        ax0.scatter(
+            X_emb[mask, 0],
+            X_emb[mask, 1],
+            s=20,
+            alpha=0.75,
+            color=colors[idx],
+            edgecolors="k",
+            linewidths=0.3,
+            label=tick_labels[idx],
+        )
+    ax0.set_title("t-SNE Embedding")
+    ax0.set_xlabel("Dimension 1")
+    ax0.set_ylabel("Dimension 2")
+    ax0.legend(
+        title="Class",
+        loc="best",
+        frameon=True,
+        fancybox=False,
+        edgecolor="0.7",
+        framealpha=0.9,
+    )
+    ax0.grid(alpha=0.2, linestyle="--", linewidth=0.5)
+    ax0.spines["top"].set_visible(False)
+    ax0.spines["right"].set_visible(False)
+
+    # Right: RSA heatmap
+    ax1 = fig.add_subplot(gs[1])
+    n_cls = len(classes)
+    sns.heatmap(
+        corr,
+        annot=False,
+        cmap=rsa_cmap,
+        xticklabels=tick_labels,
+        yticklabels=tick_labels,
+        vmin=-1.0,
+        vmax=1.0,
+        center=0.0,
+        square=True,
+        cbar_kws={"label": "Pearson $r$", "shrink": 0.82},
+        linewidths=0.5 if n_cls <= 15 else 0.0,
+        linecolor="white",
+        ax=ax1,
+    )
+
+    annot_texts = []
+    for i in range(n_cls):
+        for j in range(n_cls):
+            txt = ax1.text(
+                j + 0.5, i + 0.5, f"{corr[i, j]:.2f}",
+                ha="center", va="center", color="black", fontsize=1,
+            )
+            annot_texts.append(txt)
+
+    def _resize_annots(event=None):
+        bbox = ax1.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        cell_pts = (bbox.width * 72) / max(n_cls, 1)
+        fs = max(4, min(12, cell_pts * 0.45))
+        for t in annot_texts:
+            t.set_fontsize(fs)
+        ax1.tick_params(labelsize=max(5, min(10, fs)))
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("resize_event", _resize_annots)
+    _resize_annots()
+    ax1.set_title("Representational Similarity (RSA)")
+    ax1.set_xlabel("Class")
+    ax1.set_ylabel("Class")
+
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=15, fontweight="bold", y=1.02)
+
+    fig.tight_layout()
+    plt.show(block=True)
+    plt.close()
+
+    plt.rcParams.update(plt.rcParamsDefault)
+
+    return X_emb, corr

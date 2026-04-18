@@ -73,6 +73,35 @@ def calculate_CV(spikes, dt):
         
         return np.mean(cv_list) if cv_list else 0.0
 
+def calculate_rho_mean(spikes: torch.Tensor, dt, bin_ms: float = 5.0) -> float:
+        # spikes -> (T, N)
+        spikes = spikes.squeeze(1) if spikes.dim() == 3 else spikes
+        spikes = spikes.detach().float().cpu()
+
+        T, N = spikes.shape
+        if N < 2 or T < 2:
+            return 0.0
+
+        # bin in time
+        bin_steps = max(1, int(round(bin_ms / dt)))
+        n_bins = T // bin_steps
+        if n_bins < 2:
+            return 0.0
+
+        x = spikes[: n_bins * bin_steps].reshape(n_bins, bin_steps, N).sum(dim=1)  # (n_bins, N)
+
+        # population activity
+        r_t = x.mean(dim=1)  # (n_bins,)
+
+        var_r = torch.var(r_t, unbiased=False)
+        var_i = torch.var(x, dim=0, unbiased=False)
+        mean_var_i = torch.mean(var_i)
+
+        if mean_var_i.item() <= 1e-12:
+            return 0.0
+
+        return float((var_r / mean_var_i).item())
+
 
 def calculate_rate(spikes_counts, time):
     return (spikes_counts / (time / 1000.0)).mean() #Hz to spikes/sec

@@ -13,20 +13,20 @@ n_epochs = 100
 examples_train = 500
 examples_test = 100
 
-time = 100
+time = 1000
 dt = 1.0
 
-intensity = 600
+intensity = 64
 seed = 42
 
 mnist_input = True
-heterogeneity = True
+heterogeneity = False
 self_tuning = False
-spatial = True
+spatial = False
 convolution = False
 
-g = 4
-eta = 1.0
+g = 5
+eta = 0.6
 sigma_input = 1
 sigma_network = 0.3
 epsilon = 0.1
@@ -52,34 +52,8 @@ framework = Framework(
     intensity=intensity,
 )
 framework.build_network()
-#framework.run_one_sample(train_dataset, 0)
+framework.run_one_sample(train_dataset, 0)
 
-
-
-
-
-#print(framework.K * framework.Hf * framework.Wf)
-print(framework.mask_EI)
-
-
-# Define zoomed-in region (adjust as desired)
-# input_start, input_end = 0, 100   # e.g., first 100 input indices
-# neuron_start, neuron_end = 0, 100 # e.g., first 100 excitatory neuron indices
-
-# zoomed_W_in = framework.W_in[input_start:input_end, neuron_start:neuron_end]
-
-pos = framework.pos_E  # (N_E, 2)
-rows, cols = framework.rows, framework.cols
-
-order = torch.argsort(pos[:, 0] * cols + pos[:, 1])  # row-major ordering
-M = framework.mask_EE[order][:, order]
-
-plt.figure(figsize=(8,6))
-plt.imshow(M.cpu(), aspect='auto', cmap='viridis', interpolation='nearest')
-plt.colorbar(label='Mask value')
-plt.xlabel('Post E (sorted by position)')
-plt.ylabel('Pre E (sorted by position)')
-plt.show(block=True)
 
 
 
