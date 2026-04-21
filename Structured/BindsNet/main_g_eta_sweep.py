@@ -9,151 +9,126 @@ from readout import Readout
 from data.input_data_CNN import Data as Data_CNN
 from tools.metrics import calculate_fisher_ratio
 
+RESULTS_DIR = Path(__file__).parent / "results"
+RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_FILE = RESULTS_DIR / "g_and_eta_sweeps.txt"
+
 
 # ── Sweep values ──────────────────────────────────────────────────────────────
-G_VALUES   = [3, 4, 5, 6, 7]
-ETA_VALUES = [0.6, 0.9, 1.2, 1.5]
+G_VALUES   = [7]#[2, 3, 4, 5, 6, 7]
+ETA_VALUES = [1.2, 1.5]#[0.6, 0.9, 1.2, 1.5]
 
-# ── Fixed parameters ──────────────────────────────────────────────────────────
-N_NEURONS       = 1000
-N_EPOCHS        = 50
-EXAMPLES_TRAIN  = 500
-EXAMPLES_TEST   = 100
-
-TIME      = 100
-DT        = 1.0
-INTENSITY = 600
-SEED      = 42
-
-MNIST_INPUT   = True
-HETEROGENEITY = False
-SELF_TUNING   = False
-SPATIAL       = False
-CONVOLUTION   = False
-LOG_NORMAL    = False
-STDP          = False
-
-SIGMA_INPUT   = 1
-SIGMA_NETWORK = 1
-EPSILON       = 0.3
+name_for_the_run = "Simple Brunel + heterogeneity"
 
 
-# ── Core evaluation ───────────────────────────────────────────────────────────
+# pramaters
+n_neurons = 1000
+n_epochs = 100
+examples_train = 500
+examples_test = 100
+pca = False
 
-def evaluate(g, eta, train_dataset, test_dataset):
-    framework = Framework(
-        n_neurons=N_NEURONS,
-        time=TIME,
-        dt=DT,
-        seed=SEED,
-        log_normal=LOG_NORMAL,
-        heterogeneity=HETEROGENEITY,
-        mnist_input=MNIST_INPUT,
-        self_tuning=SELF_TUNING,
-        spatial=SPATIAL,
-        convolution=CONVOLUTION,
-        g=g,
-        eta=eta,
-        sigma_input=SIGMA_INPUT,
-        sigma_network=SIGMA_NETWORK,
-        epsilon=EPSILON,
-        intensity=INTENSITY,
-        stdp=STDP,
-    )
-    framework.build_network()
+n_components = 60
 
-    pairs_train, *_ = framework.run_stimulation(train_dataset, EXAMPLES_TRAIN)
-    pairs_test,  *_ = framework.run_stimulation(test_dataset,  EXAMPLES_TEST)
+time = 250
+dt   = 1.0
+bin_ms = 50        # width of each spike-count bin [ms]
 
-    feature_dim = pairs_train[0][0].numel()
-    readout = Readout(input_size=feature_dim, num_classes=10, seed=SEED)
-    readout.train_readout(pairs_train, n_epochs=N_EPOCHS)
-    accuracy = readout.test_readout(pairs_test)
-    fisher_J = calculate_fisher_ratio(pairs_test)
+intensity = 200
+seed = 54
 
-    del readout, pairs_train, pairs_test, framework
-    gc.collect()
-
-    return accuracy, fisher_J
+mnist_input = True
+heterogeneity = True
+self_tuning = False
+spatial = False
+convolution = False
+log_normal = False
+stdp = False
+stdp_samples = 100
 
 
-# ── Plotting ──────────────────────────────────────────────────────────────────
+sigma_input = 1
+sigma_network = 1
+epsilon = 0.5
 
-def plot_heatmaps(acc_grid, fisher_grid, plot_path):
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-
-    for ax, data, title, cmap in [
-        (ax1, acc_grid,    "Accuracy (%)",    "viridis"),
-        (ax2, fisher_grid, "Fisher Ratio (J)", "plasma"),
-    ]:
-        im = ax.imshow(data, aspect="auto", origin="lower", cmap=cmap)
-        plt.colorbar(im, ax=ax)
-        ax.set_title(title)
-        ax.set_xlabel("eta")
-        ax.set_ylabel("g")
-        ax.set_xticks(range(len(ETA_VALUES)))
-        ax.set_xticklabels(ETA_VALUES)
-        ax.set_yticks(range(len(G_VALUES)))
-        ax.set_yticklabels(G_VALUES)
-
-        for i in range(len(G_VALUES)):
-            for j in range(len(ETA_VALUES)):
-                ax.text(j, i, f"{data[i, j]:.1f}", ha="center", va="center",
-                        color="white", fontsize=7)
-
-    plt.suptitle("g × eta sweep", fontsize=13)
-    plt.tight_layout()
-    plt.savefig(plot_path, dpi=150)
-    plt.close()
-    print(f"Saved heatmap to: {plot_path}")
+data_CNN = Data_CNN(dt=dt, intensity=intensity, kernel_size=9, thetas_deg=(0, 45, 90, 135), convolution=convolution)
+train_dataset, test_dataset = data_CNN.load_MNIST()
 
 
-def write_results(results_path, acc_grid, fisher_grid):
-    with results_path.open("w", encoding="utf-8") as f:
-        f.write("g,eta,accuracy_percent,fisher_ratio\n")
-        for i, g in enumerate(G_VALUES):
-            for j, eta in enumerate(ETA_VALUES):
-                f.write(f"{g},{eta},{acc_grid[i, j]:.2f},{fisher_grid[i, j]:.4f}\n")
-    print(f"Saved results to: {results_path}")
+# results[metric][eta][g]
+accuracy_results = {eta: {} for eta in ETA_VALUES}
+cv_results       = {eta: {} for eta in ETA_VALUES}
+rho_results      = {eta: {} for eta in ETA_VALUES}
+rate_results     = {eta: {} for eta in ETA_VALUES}
 
+for g in G_VALUES:
+    for eta in ETA_VALUES:
+        print(f"Running g={g}, eta={eta} ...")
+        framework = Framework(
+            n_neurons=n_neurons,
+            time=time,
+            dt=dt,
+            bin_ms=bin_ms,
+            seed=seed,
+            log_normal=log_normal,
+            heterogeneity=heterogeneity,
+            mnist_input=mnist_input,
+            self_tuning=self_tuning,
+            spatial=spatial,
+            convolution=convolution,
+            g=g,
+            eta=eta,
+            sigma_input=sigma_input,
+            sigma_network=sigma_network,
+            epsilon=epsilon,
+            intensity=intensity,
+            stdp=stdp,
+            nu_stdp=(1e-6, 1e-4),
+            norm_stdp=None,
+        )
+        framework.build_network()
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+        pairs_train, CV_list, rho_mean_list, rate_list, g_list, eta_list = framework.run_stimulation(train_dataset, examples_train)
+        pairs_test, *_ = framework.run_stimulation(test_dataset, examples_test)
 
-def main():
-    repo_root   = Path(__file__).resolve().parents[2]
-    results_dir = repo_root / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+        feature_dim = pairs_train[0][0].numel()
+        readout = Readout(input_size=feature_dim, num_classes=10, seed=seed)
+        readout.train_readout(pairs_train, n_epochs=n_epochs)
+        acc = readout.test_readout(pairs_test)
+        print(f"Accuracy: {acc:.2f}%")
 
-    results_txt_path  = results_dir / "g_eta_sweep.csv"
-    results_plot_path = results_dir / "g_eta_sweep.png"
+        accuracy_results[eta][g] = acc
+        cv_results[eta][g]       = float(np.mean(CV_list))
+        rho_results[eta][g]      = float(np.mean(rho_mean_list))
+        rate_results[eta][g]     = float(np.mean(rate_list))
 
-    data_cnn = Data_CNN(
-        dt=DT,
-        intensity=INTENSITY,
-        kernel_size=9,
-        thetas_deg=(0, 45, 90, 135),
-        convolution=CONVOLUTION,
-    )
-    train_dataset, test_dataset = data_cnn.load_MNIST()
+        with open(RESULTS_FILE, "a") as f:
+            f.write(
+                f"{name_for_the_run}  g={g}  eta={eta}"
+                f"  accuracy={acc:.2f}%"
+                f"  CV={cv_results[eta][g]:.3f}"
+                f"  rho={rho_results[eta][g]:.3f}"
+                f"  rate={rate_results[eta][g]:.3f}\n"
+            )
 
-    n_g, n_eta = len(G_VALUES), len(ETA_VALUES)
-    acc_grid    = np.full((n_g, n_eta), np.nan)
-    fisher_grid = np.full((n_g, n_eta), np.nan)
-    total = n_g * n_eta
+        del framework, pairs_train, pairs_test, readout
+        gc.collect()
 
-    for i, g in enumerate(G_VALUES):
-        for j, eta in enumerate(ETA_VALUES):
-            step = i * n_eta + j + 1
-            print(f"[{step}/{total}] g={g}, eta={eta}")
-            acc, fisher_J = evaluate(g, eta, train_dataset, test_dataset)
-            acc_grid[i, j]    = acc
-            fisher_grid[i, j] = fisher_J
-            print(f"         accuracy={acc:.2f}%  fisher={fisher_J:.4f}")
+# ── Plot ───────────────────────────────────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(8, 5))
 
-            # Save incrementally so partial results are never lost
-            #write_results(results_txt_path, acc_grid, fisher_grid)
-            plot_heatmaps(acc_grid, fisher_grid, results_plot_path)
+colors = plt.cm.viridis(np.linspace(0.15, 0.85, len(ETA_VALUES)))
 
+for color, eta in zip(colors, ETA_VALUES):
+    accs = [accuracy_results[eta][g] for g in G_VALUES]
+    ax.plot(G_VALUES, accs, marker="o", color=color, label=f"eta={eta}")
 
-if __name__ == "__main__":
-    main()
+ax.set_xlabel("g")
+ax.set_ylabel("Accuracy (%)")
+ax.set_title(f"{name_for_the_run} — g / eta sweep")
+ax.legend(title="eta")
+ax.grid(True, linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.savefig(RESULTS_DIR / "g_eta_sweep.png", dpi=150)
+plt.show()
+print(f"Plot saved to {RESULTS_DIR / 'g_eta_sweep.png'}")

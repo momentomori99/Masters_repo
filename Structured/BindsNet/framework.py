@@ -38,17 +38,25 @@ from visualization.visualizations_spatial import plot_spikecount_grid
 
 
 class Framework:
-    def __init__(self, n_neurons, time, dt, seed, log_normal=False, heterogeneity=False, mnist_input=True, self_tuning=True, spatial=True, convolution=True, input_channels=4, g=4, eta=1.0, sigma_input = 1, sigma_network = 1, epsilon = 0.3, intensity=430, stdp=False, nu_stdp=(1e-5, 1e-3), norm_stdp=None):
+    def __init__(self, n_neurons, time, dt, seed, bin_ms=50, log_normal=False, heterogeneity=False, mnist_input=True, self_tuning=True, spatial=True, convolution=True, input_channels=4, g=4, eta=1.0, sigma_input = 1, sigma_network = 1, epsilon = 0.3, intensity=430, stdp=False, nu_stdp=(1e-5, 1e-3), norm_stdp=None):
         self.seed = seed
         np.random.seed(self.seed)
         torch.cuda.manual_seed_all(self.seed)
         torch.manual_seed(self.seed)
-        self.device = "cpu"
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # BindsNET's recommended GPU approach (see Hazan et al. 2018, section 3):
+        # set the default device so every tensor created (including torch.tensor())
+        # lands on the GPU from the start — no manual migration needed.
+        # set_default_device (PyTorch >= 2.0) covers torch.tensor() unlike the
+        # older set_default_tensor_type which only covers factory functions.
+        if self.device.type == "cuda":
+            torch.set_default_device(self.device)
+        print(f"Using device: {self.device}")
         
         # Simulation time parameters
         self.time = int(time)                                           
         self.dt = float(dt)  
-        self.bin_ms = 50
+        self.bin_ms = bin_ms
         # Methods
         self.heterogeneity = heterogeneity  
         self.intensity = intensity
@@ -83,7 +91,8 @@ class Framework:
         
 
         # Connectivity/synapse parameters
-        self.epsilon = epsilon 
+        self.epsilon_non_spatial = 0.1
+        self.epsilon = epsilon
         self.sigma_input = sigma_input                                           
         self.sigma_network = sigma_network
         self.w_E = 1                                                 
@@ -115,11 +124,14 @@ class Framework:
             self.tau_m_E = self.tau_m_base
             self.theta_I = self.theta_base
             self.tau_m_I = self.tau_m_base
-        self.tau_s = self.tau_m_base / 1000.0                                         
+        self.tau_s = self.tau_m_base / 1000.0
+        self.delay = 0 # synaptic delay in ms  
+        self.delay_steps = int(self.delay / self.dt)                                        
 
         # Noise paramters
         self.v_th = self.theta_base / (self.tau_s * self.w_ext) 
-        self.rate_ext = self.eta * self.v_th
+        #self.rate_ext = self.eta * self.v_th
+        self.rate_ext = self.eta * self.theta_base / self.tau_s
 
     
     def build_network(self):
@@ -160,10 +172,10 @@ class Framework:
                 self.connection_F_E = Connection(source=self.feat_in, target=self.neurons_E, w=self.W_in)
             self.network.add_connection(self.connection_F_E, source="F", target="E")
 
-            self.mask_EE = distance_mask_2d_toroidal(self.pos_E, self.pos_E, self.epsilon, self.sigma_network, self.rows, self.cols, device=self.device)
-            self.mask_EI = distance_mask_2d_toroidal(self.pos_E, self.pos_I, self.epsilon, self.sigma_network, self.rows, self.cols, device=self.device)
-            self.mask_IE = distance_mask_2d_toroidal(self.pos_I, self.pos_E, self.epsilon, self.sigma_network, self.rows, self.cols, device=self.device)
-            self.mask_II = distance_mask_2d_toroidal(self.pos_I, self.pos_I, self.epsilon, self.sigma_network, self.rows, self.cols, device=self.device)
+            self.mask_EE = distance_mask_2d_toroidal(self.pos_E, self.pos_E, self.epsilon_non_spatial, self.sigma_network, self.rows, self.cols, device=self.device)
+            self.mask_EI = distance_mask_2d_toroidal(self.pos_E, self.pos_I, self.epsilon_non_spatial, self.sigma_network, self.rows, self.cols, device=self.device)
+            self.mask_IE = distance_mask_2d_toroidal(self.pos_I, self.pos_E, self.epsilon_non_spatial, self.sigma_network, self.rows, self.cols, device=self.device)
+            self.mask_II = distance_mask_2d_toroidal(self.pos_I, self.pos_I, self.epsilon_non_spatial, self.sigma_network, self.rows, self.cols, device=self.device)
         
         else:
             input_indices = torch.randint(0, 784, (self.N_E,)) # Which input neurons feeds excitatory neuron j
@@ -202,10 +214,17 @@ class Framework:
             self.W_IE = self.mask_IE * torch.normal(self.mean_w_IE, self.std_w_IE, size=(self.N_I, self.N_E))
             self.W_II = self.mask_II * torch.normal(self.mean_w_II, self.std_w_II, size=(self.N_I, self.N_I))
 
-        connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=self.W_EE.clone())
-        connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=self.W_EI)
-        self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=self.W_IE)
-        self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=self.W_II)
+        delay_EE = torch.full((self.N_E, self.N_E), self.delay_steps, dtype=torch.int)
+        delay_EI = torch.full((self.N_E, self.N_I), self.delay_steps, dtype=torch.int)
+        delay_IE = torch.full((self.N_I, self.N_E), self.delay_steps, dtype=torch.int)
+        delay_II = torch.full((self.N_I, self.N_I), self.delay_steps, dtype=torch.int)
+
+        connection_EE = Connection(source=self.neurons_E, target=self.neurons_E, w=self.W_EE.clone(), delay=delay_EE)
+        connection_EI = Connection(source=self.neurons_E, target=self.neurons_I, w=self.W_EI, delay=delay_EI)
+        connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=self.W_IE, delay=delay_IE)
+        connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=self.W_II, delay=delay_II)
+        self.connection_IE = Connection(source=self.neurons_I, target=self.neurons_E, w=self.W_IE, delay=delay_IE)
+        self.connection_II = Connection(source=self.neurons_I, target=self.neurons_I, w=self.W_II, delay=delay_II)
         connection_noise_E = Connection(source=self.noise_E, target=self.neurons_E, w=self.w_ext * torch.eye(self.N_E))
         connection_noise_I = Connection(source=self.noise_I, target=self.neurons_I, w=self.w_ext * torch.eye(self.N_I))
 
@@ -228,7 +247,7 @@ class Framework:
         self.network.add_monitor(self.mon_I, name="I_spikes")
 
         self.network.learning = False
-        print("Network built successfully")
+        print(f"Network built successfully (device: {self.device})")
 
 
     
@@ -248,12 +267,7 @@ class Framework:
 
         E_spike_counts, I_spike_counts, E_spikes, I_spikes = self.run(feat_spikes)
 
-        plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster")
-        #plot_rate_distribution(self.time, E_spike_counts, I_spike_counts, "Excitatory rate distribution", "Inhibitory rate distribution")
-        #plot_spike_distribution(E_spike_counts, I_spike_counts, "Excitatory and inhibitory spike distribution")
-        #plot_EI_positions(self.pos_E, self.pos_I)
-        #plot_outgoing_connections(self.mask_EE, self.pos_E, 450, "Outgoing connections from excitatory neuron 450")
-        #plot_spikecount_grid(E_spike_counts, self.pos_E, "Excitatory spike count heatmap")
+        
 
         CV = calculate_CV(E_spikes, self.dt)
         print(f"CV: {CV:.2f}")
@@ -261,6 +275,13 @@ class Framework:
         print(f"rho_mean: {rho_mean:.2f}")
         rate = calculate_rate(E_spike_counts, self.time)
         print(f"rate: {rate:.2f}")
+
+        plot_raster(E_spikes, I_spikes, "Excitatory raster", "Inhibitory raster", g = self.g, eta = self.eta, CV = CV, rho_mean = rho_mean, rate = rate)
+        #plot_rate_distribution(self.time, E_spike_counts, I_spike_counts, "Excitatory rate distribution", "Inhibitory rate distribution")
+        #plot_spike_distribution(E_spike_counts, I_spike_counts, "Excitatory and inhibitory spike distribution")
+        #plot_EI_positions(self.pos_E, self.pos_I)
+        #plot_outgoing_connections(self.mask_EE, self.pos_E, 450, "Outgoing connections from excitatory neuron 450")
+        #plot_spikecount_grid(E_spike_counts, self.pos_E, "Excitatory spike count heatmap")
         
 
     
@@ -309,8 +330,8 @@ class Framework:
         encoder = PoissonEncoder(time=1, dt=self.dt)
 
         for t in range(self.time):
-            rates_XE = torch.ones(self.N_E) * self.rate_ext
-            rates_XI = torch.ones(self.N_I) * self.rate_ext
+            rates_XE = torch.ones(self.N_E, device=self.device) * self.rate_ext
+            rates_XI = torch.ones(self.N_I, device=self.device) * self.rate_ext
             spikes_XE = encoder(rates_XE)
             spikes_XI = encoder(rates_XI)
             feat_t = feat_spikes[t:t+1] # (1, 1, D_in)
@@ -429,35 +450,46 @@ class Framework:
         self.rate_ext = self.v_th * self.eta
 
     def _self_tune(self, CV_value, rho_mean_value, rate):
-        CV_low, CV_high = 0.6, 1.2
-        rho_high = 0.05
+        CV_low,  CV_high    = 0.6,  1.2
+        rho_high            = 0.1
+        rate_low, rate_high = 2.0,  80.0
 
-        rate_low = 2.0
-        rate_mid = 20.0
-        rate_high = 80.0
+        eta_min, eta_max = 0.1,  2.0   # raise eta_min so it can't collapse to near-zero
+        g_min,   g_max   = 1.0,  10.0
 
-        eta_min, eta_max = 0.5, 15.0
-        g_min, g_max = 1.0, 15.0
+        eps_g    = 3.0
+        eps_g_cv = 0.05   # smaller — don't slam g upward
+        eps_eta  = 0.02
 
+        # --- Priority 1: synchrony ---
         if rho_mean_value > rho_high:
-            self.set_g(min(max(self.g + 0.1, g_min), g_max))
+            delta_g = eps_g * (rho_mean_value - rho_high)
+            self.set_g(float(np.clip(self.g + delta_g, g_min, g_max)))
             if rate > rate_low:
-                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
+                self.set_eta(float(np.clip(self.eta - eps_eta, eta_min, eta_max)))
             return
 
+        # --- Priority 2: irregularity (CV) ---
         if CV_value < CV_low:
             if rate > rate_high:
-                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
-
+                # Too fast and too regular → reduce drive
+                self.set_eta(float(np.clip(self.eta - eps_eta, eta_min, eta_max)))
             elif rate < rate_low:
-                self.set_eta(min(max(self.eta + 0.02, eta_min), eta_max))
-                self.set_g(min(max(self.g - 0.05, g_min), g_max))
-
+                # Too quiet → boost drive, weaken inhibition
+                self.set_eta(float(np.clip(self.eta + eps_eta, eta_min, eta_max)))
+                delta_g = eps_g * (rho_mean_value - rho_high)  # negative → g decreases
+                self.set_g(float(np.clip(self.g + delta_g, g_min, g_max)))
             else:
-                self.set_eta(min(max(self.eta - 0.02, eta_min), eta_max))
-            return
+                # Rate OK but too regular → INCREASE drive to push into fluctuation regime
+                # Do NOT reduce eta here — that makes it worse
+                self.set_eta(float(np.clip(self.eta + eps_eta, eta_min, eta_max)))
+                # Optionally also slightly reduce g to allow more E fluctuations
+                delta_g = -eps_g_cv * (CV_low - CV_value)
+                self.set_g(float(np.clip(self.g + delta_g, g_min, g_max)))
 
-        return
+        # --- Priority 3: CV too high (over-irregular/bursting without rho trigger) ---
+        elif CV_value > CV_high:
+            self.set_eta(float(np.clip(self.eta - eps_eta, eta_min, eta_max)))
 
     def get_configuration_info(self):
         print("======== Quick Summary of the parameters ========")

@@ -29,7 +29,7 @@ class Readout:
     def _init_model(self):
 
         torch.manual_seed(self.seed)
-        self.model = NN(self.input_size, self.num_classes).to("cpu")
+        self.model = NN(self.input_size, self.num_classes)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -50,7 +50,7 @@ class Readout:
             for s, l in shuffled_pairs:
                 self.optimizer.zero_grad()
                 logits = self.model(s)  # (1, C)
-                target = torch.tensor([int(l)], dtype=torch.long)  # (1,)
+                target = torch.tensor([int(l)], dtype=torch.long)
                 loss = self.criterion(logits, target)
                 total_loss += loss.item()
                 loss.backward()

@@ -8,26 +8,26 @@ import torch
 import matplotlib.pyplot as plt
 from visualization.visualizations_readout import plot_tsne, plot_confusion_heatmap, plot_rsa_heatmap, plot_tsne_rsa
 from visualization.visualizations_spatial import plot_EI_positions, plot_outgoing_connections, plot_spikecount_grid
-
-
+from visualization.visualizations import self_tuning_plot
 
 # pramaters
-n_neurons = 1000
-n_epochs = 50
+n_neurons = 500
+n_epochs = 100
 examples_train = 500
-examples_test = 200
+examples_test = 100
 pca = False
 
 n_components = 60
 
-time = 1000
-dt = 1.0
+time = 250
+dt   = 1.0
+bin_ms = 50        # width of each spike-count bin [ms]
 
-intensity = 64
+intensity = 230
 seed = 54
 
 mnist_input = False
-heterogeneity = False
+heterogeneity = True
 self_tuning = False
 spatial = False
 convolution = False
@@ -35,11 +35,11 @@ log_normal = False
 stdp = False
 stdp_samples = 100
 
-g = 5#5
+g = 3#5
 eta = 1.5#0.6
 sigma_input = 1
 sigma_network = 1
-epsilon = 0.5
+epsilon = 0.1
 
 data_CNN = Data_CNN(dt=dt, intensity=intensity, kernel_size=9, thetas_deg=(0, 45, 90, 135), convolution=convolution)
 train_dataset, test_dataset = data_CNN.load_MNIST()
@@ -48,6 +48,7 @@ framework = Framework(
     n_neurons=n_neurons,
     time=time,
     dt=dt,
+    bin_ms=bin_ms,
     seed=seed,
     log_normal=log_normal,
     heterogeneity=heterogeneity,
@@ -81,69 +82,25 @@ if stdp:
 target_label = 0
 framework.run_one_sample(train_dataset, target_label)
 
-# pairs_train, CV_list, rho_mean_list, rate_list, g_list, eta_list = framework.run_stimulation(train_dataset, examples_train)
-# pairs_test, *_ = framework.run_stimulation(test_dataset, examples_test)
+#pairs_train, CV_list, rho_mean_list, rate_list, g_list, eta_list = framework.run_stimulation(train_dataset, examples_train)
 
 
-# # Convert lists to numpy arrays for easier plotting
-# CV_arr = np.array(CV_list)
-# rho_arr = np.array(rho_mean_list)
-# rate_arr = np.array(rate_list)
-# g_arr = np.array(g_list)
-# eta_arr = np.array(eta_list)
 
-# print(f"Average CV: {CV_arr.mean():.4f}")
-# print(f"Average rho mean: {rho_arr.mean():.4f}")
-
-
-# steps = np.arange(len(CV_arr))
-
-# fig, axs = plt.subplots(3, 2, figsize=(12, 10))
-# axs = axs.flatten()
-
-# axs[0].plot(steps, CV_arr)
-# axs[0].set_title("CV (coefficient of variation)")
-# axs[0].set_xlabel("Step")
-# axs[0].set_ylabel("CV")
-
-# axs[1].plot(steps, rho_arr)
-# axs[1].set_title("Mean Population Firing Rate (rho mean)")
-# axs[1].set_xlabel("Step")
-# axs[1].set_ylabel("Rho Mean")
-
-# axs[2].plot(steps, rate_arr)
-# axs[2].set_title("Rate (Hz)")
-# axs[2].set_xlabel("Step")
-# axs[2].set_ylabel("Rate")
-
-# axs[3].plot(steps, g_arr)
-# axs[3].set_title("g (Inhibition/Excitation ratio)")
-# axs[3].set_xlabel("Step")
-# axs[3].set_ylabel("g")
-
-# axs[4].plot(steps, eta_arr)
-# axs[4].set_title("eta (External drive parameter)")
-# axs[4].set_xlabel("Step")
-# axs[4].set_ylabel("eta")
-
-# # Hide the last subplot if not used
-# axs[5].axis('off')
-
-# plt.tight_layout()
-# #plt.savefig("results/training_dynamics.png", dpi=150, bbox_inches='tight')
-# plt.show(block=True)
-
+#self_tuning_plot(CV_list, rho_mean_list, rate_list, g_list, eta_list)
 
 # if pca:
 #     pairs_train, pairs_test_pca = apply_pca(pairs_train, pairs_test, n_components)
 #     plot_explained_variance(pairs_train)
 #     plot_explained_variance(pairs_test)
 
+# pairs_test, *_ = framework.run_stimulation(test_dataset, examples_test)
+
 # feature_dim = pairs_train[0][0].numel()
 # readout = Readout(input_size=feature_dim, num_classes=10, seed=seed)
 # readout.train_readout(pairs_train, n_epochs=n_epochs)
 # acc = readout.test_readout(pairs_test)
 # print(f"Accuracy: {acc:.2f}%")
+
 
 # fisher_J = calculate_fisher_ratio(pairs_test)
 # print(f"Fisher ratio: {fisher_J:.4f}")

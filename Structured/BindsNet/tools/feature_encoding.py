@@ -24,8 +24,7 @@ def spikes_to_binned_counts(E_spikes, bin_ms, dt, time):
     Converts the spikes observed in the network to binned counts.
     """
     s = E_spikes.squeeze(1) if E_spikes.dim() == 3 else E_spikes
-    s = np.array(s)
-    s = s.astype(int)
+    s = s.detach().cpu().numpy().astype(int)
 
     bin_steps = int(round(bin_ms / dt))
     N_bins = time // bin_steps
